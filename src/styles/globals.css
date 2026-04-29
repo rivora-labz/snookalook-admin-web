@@ -2,14 +2,58 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+/* ──────────────────────────────────────────────
+   Dual-mode theme tokens
+   Default = dark (admin pillar I-A #8 — corrected).
+   .theme-dark / .theme-light toggled by ThemeProvider.
+   ────────────────────────────────────────────── */
+
+:root,
+.theme-dark {
   color-scheme: dark;
+  --th-bg: #0A0A0A;
+  --th-card: #1A1A1A;
+  --th-elevated: #111111;
+  --th-input: #141414;
+  --th-divider: #2A2A2A;
+  --th-text: #FFFFFF;
+  --th-text-secondary: #B0B0B0;
+  --th-text-tertiary: #6B6B6B;
+  --th-text-muted: #404040;
+  --th-border: rgba(255, 255, 255, 0.05);
+  --th-border-medium: rgba(255, 255, 255, 0.1);
+  --th-gold: #D4AF37;
+  --th-gold-hover: #F7D774;
+  --th-gold-bg: rgba(212, 175, 55, 0.1);
+  --th-hover: rgba(255, 255, 255, 0.05);
+  --th-active: rgba(255, 255, 255, 0.08);
+}
+
+.theme-light {
+  color-scheme: light;
+  --th-bg: #FAFAF7;
+  --th-card: #FFFFFF;
+  --th-elevated: #FFFFFF;
+  --th-input: #F4F4F0;
+  --th-divider: #E8E8E4;
+  --th-text: #1A1A1A;
+  --th-text-secondary: #666666;
+  --th-text-tertiary: #999999;
+  --th-text-muted: #CCCCCC;
+  --th-border: rgba(0, 0, 0, 0.06);
+  --th-border-medium: rgba(0, 0, 0, 0.1);
+  --th-gold: #B8961F;
+  --th-gold-hover: #D4AF37;
+  --th-gold-bg: rgba(184, 150, 31, 0.08);
+  --th-hover: rgba(0, 0, 0, 0.04);
+  --th-active: rgba(0, 0, 0, 0.06);
 }
 
 html,
 body {
-  background-color: #0a0a0a;
-  color: #ffffff;
+  background-color: var(--th-bg);
+  color: var(--th-text);
   font-family: Inter, system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }

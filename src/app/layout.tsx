@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import "../styles/globals.css";
+import { ThemeProvider } from "../lib/ThemeContext";
 
 export const metadata: Metadata = {
   title: "Snook A Look — Center Admin",
   description: "Operations dashboard for snooker, pool, and billiards centers.",
 };
+
+const FOUC_SCRIPT = `(function(){try{var t=localStorage.getItem('snook-admin-theme')||'dark';document.documentElement.classList.add(t==='dark'?'theme-dark':'theme-light');}catch(e){document.documentElement.classList.add('theme-dark');}})();`;
 
 export default function RootLayout({
   children,
@@ -13,39 +16,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-bg-primary text-text-primary">
-        <div className="flex min-h-screen">
-          <nav className="w-56 border-r border-white/5 bg-bg-secondary p-4">
-            <div className="mb-8 font-display text-xl">Snook A Look</div>
-            <ul className="space-y-2 text-sm text-text-secondary">
-              <li>
-                <a
-                  href="/"
-                  className="block rounded-button px-3 py-2 hover:bg-white/5 hover:text-text-primary"
-                >
-                  Tables
-                </a>
-              </li>
-              <li>
-                <a
-                  href="/bookings"
-                  className="block rounded-button px-3 py-2 hover:bg-white/5 hover:text-text-primary"
-                >
-                  Bookings
-                </a>
-              </li>
-              <li>
-                <a
-                  href="/earnings"
-                  className="block rounded-button px-3 py-2 hover:bg-white/5 hover:text-text-primary"
-                >
-                  Earnings
-                </a>
-              </li>
-            </ul>
-          </nav>
-          <main className="flex-1 p-8">{children}</main>
-        </div>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: FOUC_SCRIPT }} />
+      </head>
+      <body className="min-h-screen bg-th-bg text-th-text">
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );
