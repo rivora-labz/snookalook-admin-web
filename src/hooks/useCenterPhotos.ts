@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import type { CenterPhoto } from "@rivora-labz/snook-shared/types";
+import type { CenterPhoto } from "@rivora-labz/snook-shared";
 import { apiFetch, apiFetchFormData, ApiError } from "../lib/api";
 
 interface UseCenterPhotosReturn {

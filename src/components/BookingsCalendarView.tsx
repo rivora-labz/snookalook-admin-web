@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
-import type { BookingState } from "@rivora-labz/snook-shared/enums";
+import type { BookingState } from "@rivora-labz/snook-shared";
 import { apiFetch, ApiError } from "../lib/api";
 import { STATUS_TOKEN, STATUS_TOKEN_TEXT } from "../lib/status-tokens";
 

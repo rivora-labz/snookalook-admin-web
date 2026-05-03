@@ -3,14 +3,14 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import type { Route } from "next";
-import type { BookingState, MatchMode, SkillTier } from "@rivora-labz/snook-shared/enums";
+import type { BookingState, MatchMode, SkillTier } from "@rivora-labz/snook-shared";
 import type {
   AdminPlayerDetail,
   AdminChallengeSummary,
   AdminPlayerBookingItem,
   AdminPlayerMatchItem,
   AdminPlayerMatchResult,
-} from "@rivora-labz/snook-shared/types";
+} from "@rivora-labz/snook-shared";
 import { apiFetch, formatDate, formatAED, ApiError } from "../../../../lib/api";
 import { useStaffSession } from "../../../../lib/use-staff-session";
 
