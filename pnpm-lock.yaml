@@ -18,8 +18,8 @@ importers:
         specifier: ^3.2.2
         version: 3.2.2(react@18.3.1)
       '@rivora-labz/snook-shared':
-        specifier: 1.0.1
-        version: 1.0.1
+        specifier: 1.0.2
+        version: 1.0.2
       '@supabase/ssr':
         specifier: ^0.5.2
         version: 0.5.2(@supabase/supabase-js@2.104.1)
@@ -256,8 +256,8 @@ packages:
       react-redux:
         optional: true
 
-  '@rivora-labz/snook-shared@1.0.1':
-    resolution: {integrity: sha512-FeOYKon8SMtVJYoDF2jRum69VbZcSN+SSqyKQxVYfSmdGIVMgbIwZd/Du498iaY7fAdAp6kgYJixOjVQsyAgzw==, tarball: https://npm.pkg.github.com/download/@rivora-labz/snook-shared/1.0.1/e47353239299bcdffc67e2614e3562f190319056}
+  '@rivora-labz/snook-shared@1.0.2':
+    resolution: {integrity: sha512-Q8R1BqpOgf4H72XoqURexW/F7OACXIbN7QBSmCWkuL118hP0TlXrbVp889UTUdkkwtAIklhgyYuPR9qP3YeM7Q==, tarball: https://npm.pkg.github.com/download/@rivora-labz/snook-shared/1.0.2/6e6920e512f19ec7f7601d772bbed5e2868e9a44}
 
   '@rtsao/scc@1.1.0':
     resolution: {integrity: sha512-zt6OdqaDoOnJ1ZYsCYGt9YmWzDXl4vQdKTyJev62gFhRGKdx7mcT54V9KIjg+d2wi9EXsPvAPKe7i7WjfVWB8g==}
@@ -2254,7 +2254,7 @@ snapshots:
       react: 18.3.1
       react-redux: 9.2.0(@types/react@18.3.28)(react@18.3.1)(redux@5.0.1)
 
-  '@rivora-labz/snook-shared@1.0.1': {}
+  '@rivora-labz/snook-shared@1.0.2': {}
 
   '@rtsao/scc@1.1.0': {}
 
