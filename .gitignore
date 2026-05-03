@@ -1,1 +1,10 @@
 .vercel
+node_modules
+.next
+out
+.npmrc
+.env
+.env.local
+.env.*.local
+*.log
+tsconfig.tsbuildinfo
