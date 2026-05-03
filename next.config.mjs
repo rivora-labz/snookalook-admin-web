@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["@snook/shared"],
+  transpilePackages: ["@rivora-labz/snook-shared"],
   experimental: {
     typedRoutes: true,
   },

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
-import type { SkillTier } from "@snook/shared/enums";
+import type { SkillTier } from "@rivora-labz/snook-shared/enums";
 import { apiFetch, formatDate } from "../../../lib/api";
 
 interface PlayerItem {

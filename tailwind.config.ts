@@ -1,5 +1,5 @@
 import type { Config } from "tailwindcss";
-import { tokens } from "@snook/shared/tokens";
+import { tokens } from "@rivora-labz/snook-shared/tokens";
 
 const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import type { Route } from "next";
-import type { TableStatus, TableType } from "@snook/shared/enums";
+import type { TableStatus, TableType } from "@rivora-labz/snook-shared/enums";
 import { 
   DotsThreeVertical, 
   TrendUp, 

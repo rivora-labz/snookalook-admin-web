@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import type { TableStatus, TableType } from "@snook/shared/enums";
+import type { TableStatus, TableType } from "@rivora-labz/snook-shared/enums";
 import { apiFetch } from "../lib/api";
 import { useRealtimeTables } from "../hooks/useRealtimeTables";
 

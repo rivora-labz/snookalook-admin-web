@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import type { StaffRole } from "@snook/shared/enums";
+import type { StaffRole } from "@rivora-labz/snook-shared/enums";
 import { apiFetch, formatDate } from "../../../lib/api";
 
 interface StaffItem {
