@@ -66,4 +66,7 @@ jobs:
       - name: Smoke test
         run: |
           sleep 5
-          curl -fsS -o /dev/null -w "HTTP %{http_code}\n" "${{ steps.deploy.outputs.url }}" || (echo "Smoke test failed" && exit 1)
+          CODE=$(curl -sS -o /dev/null -w "%{http_code}" "${{ steps.deploy.outputs.url }}")
+          echo "HTTP $CODE"
+          # 200 = public, 401 = behind Vercel deployment protection (still deployed OK)
+          if [ "$CODE" = "200" ] || [ "$CODE" = "401" ]; then exit 0; else exit 1; fi
