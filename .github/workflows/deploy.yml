@@ -54,7 +54,17 @@ jobs:
       - name: Pull Vercel env
         run: vercel pull --yes --environment=production --token=$VERCEL_TOKEN
       - name: Build
-        run: vercel build --prod --token=$VERCEL_TOKEN
+        run: |
+          set +e
+          vercel build --prod --token=$VERCEL_TOKEN
+          BUILD_RC=$?
+          echo "=== installed shared package.json ==="
+          find . -path ./node_modules/.pnpm -prune -o -path "*@rivora-labz/snook-shared/package.json" -print 2>/dev/null | head -5
+          for f in $(find . -path "*@rivora-labz/snook-shared/package.json" 2>/dev/null | head -5); do
+            echo "--- $f ---"
+            cat "$f"
+          done
+          exit $BUILD_RC
       - name: Deploy
         id: deploy
         run: |
