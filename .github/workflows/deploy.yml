@@ -58,10 +58,9 @@ jobs:
       - name: Deploy
         id: deploy
         run: |
-          mkdir -p /tmp/vdeploy
-          cp -r .vercel /tmp/vdeploy/
-          cd /tmp/vdeploy
+          mv .git /tmp/.git.bak
           URL=$(vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN)
+          mv /tmp/.git.bak .git
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "Deployed: $URL"
       - name: Smoke test
