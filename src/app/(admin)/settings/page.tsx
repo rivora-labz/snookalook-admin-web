@@ -33,9 +33,9 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-card border border-th-divider bg-th-card p-5">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-sm font-medium text-th-text">{title}</h2>
+    <div className="rounded-[24px] border border-th-divider bg-th-card p-6">
+      <div className="mb-5 flex items-center justify-between gap-4">
+        <h2 className="font-display text-xl text-th-text">{title}</h2>
         <button
           onClick={onSave}
           disabled={saving}
@@ -134,9 +134,12 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <div>
-        <header className="mb-6">
-          <h1 className="font-display text-3xl">Settings</h1>
-          <p className="mt-1 text-th-text-secondary">Center configuration</p>
+        <header className="mb-8">
+          <div className="mb-2 text-[11px] uppercase tracking-[0.22em] text-th-text-tertiary">
+            Settings Surface
+          </div>
+          <h1 className="font-display text-3xl">Club Settings</h1>
+          <p className="mt-2 text-th-text-secondary">Center configuration, hours, pricing, and policies.</p>
         </header>
         <div className="space-y-4">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -150,8 +153,11 @@ export default function SettingsPage() {
   if (error) {
     return (
       <div>
-        <header className="mb-6">
-          <h1 className="font-display text-3xl">Settings</h1>
+        <header className="mb-8">
+          <div className="mb-2 text-[11px] uppercase tracking-[0.22em] text-th-text-tertiary">
+            Settings Surface
+          </div>
+          <h1 className="font-display text-3xl">Club Settings</h1>
         </header>
         <div className="rounded-card border border-th-divider bg-th-card p-8 text-center">
           <p className="text-[#E74C3C]">{error}</p>
@@ -167,10 +173,13 @@ export default function SettingsPage() {
   }
 
   return (
-    <div>
-      <header className="mb-6">
-        <h1 className="font-display text-3xl">Settings</h1>
-        <p className="mt-1 text-th-text-secondary">Center configuration</p>
+    <div className="flex flex-col gap-6">
+      <header>
+        <div className="mb-2 text-[11px] uppercase tracking-[0.22em] text-th-text-tertiary">
+          Settings Surface
+        </div>
+        <h1 className="font-display text-3xl">Club Settings</h1>
+        <p className="mt-2 text-th-text-secondary">Center configuration, hours, pricing, and policies.</p>
       </header>
 
       <div className="space-y-6">

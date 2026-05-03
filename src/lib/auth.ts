@@ -1,6 +1,8 @@
 import { createClient } from "./supabase/server";
+import { API_BASE } from "./api-base";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://api.snookalook.app/v1";
+const AUTH_MODE = process.env.NEXT_PUBLIC_AUTH_MODE ?? "dev";
+const DEV_USER_ID = process.env.NEXT_PUBLIC_DEV_USER_ID ?? "";
 
 export interface StaffContext {
   staffMemberId: string;
@@ -22,14 +24,35 @@ export interface ServerSession {
   staff: StaffContext | null;
 }
 
+const DEV_STAFF: StaffContext = {
+  staffMemberId: "dev-staff",
+  centerId: "dev-center",
+  role: "OWNER",
+  user: { id: "dev-user", displayName: "Dev User", email: "dev@snookalook.app", phone: "+971000000000" },
+};
+
 export async function getServerSession(): Promise<ServerSession | null> {
+  if (AUTH_MODE !== "supabase") {
+    if (!DEV_USER_ID) {
+      return { userId: "dev-user", accessToken: "", email: null, phone: null, staff: DEV_STAFF };
+    }
+    const staff = await getStaffContext(DEV_USER_ID, true);
+    return {
+      userId: DEV_USER_ID,
+      accessToken: "",
+      email: null,
+      phone: null,
+      staff: staff ?? DEV_STAFF,
+    };
+  }
+
   const supabase = createClient();
   const {
     data: { session },
   } = await supabase.auth.getSession();
   if (!session) return null;
 
-  const staff = await getStaffContext(session.access_token);
+  const staff = await getStaffContext(session.access_token, false);
 
   return {
     userId: session.user.id,
@@ -45,12 +68,12 @@ export async function getServerSession(): Promise<ServerSession | null> {
  * Returns null on 403 (NOT_STAFF), 401, or network error. Middleware is the
  * primary gate; server components may call this for role-aware UI.
  */
-export async function getStaffContext(accessToken: string): Promise<StaffContext | null> {
+export async function getStaffContext(token: string, isDevUser = false): Promise<StaffContext | null> {
   try {
-    const res = await fetch(`${API_BASE}/staff/me`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      cache: "no-store",
-    });
+    const headers: Record<string, string> = isDevUser
+      ? { "X-Dev-User": token }
+      : { Authorization: `Bearer ${token}` };
+    const res = await fetch(`${API_BASE}/staff/me`, { headers, cache: "no-store" });
     if (!res.ok) return null;
     const body = await res.json();
     const sm = body.staffMember;

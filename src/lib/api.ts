@@ -1,6 +1,6 @@
 import { createClient } from "./supabase/client";
+import { API_BASE } from "./api-base";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://api.snookalook.app/v1";
 const AUTH_MODE = process.env.NEXT_PUBLIC_AUTH_MODE ?? "dev";
 
 // Dev-only fallback: backend (NODE_ENV !== "production") accepts
@@ -45,6 +45,44 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     throw new ApiError(res.status, body?.code ?? "UNKNOWN", body?.message ?? res.statusText);
+  }
+
+  return res.json();
+}
+
+export async function apiFetchBlob(path: string): Promise<Blob> {
+  const authHeader = await getAuthHeader();
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { ...authHeader },
+  });
+  if (res.status === 401 && AUTH_MODE === "supabase" && typeof window !== "undefined") {
+    window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
+    throw new ApiError(401, "UNAUTHORIZED", "Session expired.");
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new ApiError(res.status, body?.code ?? "UNKNOWN", body?.message ?? res.statusText);
+  }
+  return res.blob();
+}
+
+export async function apiFetchFormData<T>(path: string, body: FormData): Promise<T> {
+  const authHeader = await getAuthHeader();
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: { ...authHeader },
+    body,
+  });
+
+  if (res.status === 401 && AUTH_MODE === "supabase" && typeof window !== "undefined") {
+    window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
+    throw new ApiError(401, "UNAUTHORIZED", "Session expired.");
+  }
+
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => null);
+    throw new ApiError(res.status, errBody?.code ?? "UNKNOWN", errBody?.message ?? res.statusText);
   }
 
   return res.json();

@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { API_BASE } from "./lib/api-base";
 
 const PUBLIC_PATHS = ["/login", "/forbidden", "/auth/callback"];
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://api.snookalook.app/v1";
 
 type StaffCheck = "OK" | "NOT_STAFF" | "UNAUTH" | "ERROR";
 
@@ -30,7 +30,7 @@ function redirectTo(req: NextRequest, pathname: string, withNext?: string) {
 }
 
 export async function middleware(req: NextRequest) {
-  const authMode = process.env.NEXT_PUBLIC_AUTH_MODE ?? "dev";
+  const authMode = process.env.NEXT_PUBLIC_AUTH_MODE ?? "supabase";
   const path = req.nextUrl.pathname;
   const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
 
@@ -40,7 +40,7 @@ export async function middleware(req: NextRequest) {
     if (!devUserId) return NextResponse.next();
     const verdict = await checkStaff({ "X-Dev-User": devUserId });
     if (verdict === "NOT_STAFF") return redirectTo(req, "/forbidden");
-    if (verdict === "UNAUTH") return redirectTo(req, "/login", path);
+    // In dev mode, UNAUTH/ERROR means backend unreachable or misconfigured — pass through.
     return NextResponse.next();
   }
 

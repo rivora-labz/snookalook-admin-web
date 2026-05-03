@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { apiFetch, formatAED, formatDate, formatDateShort } from "../../../lib/api";
+import { apiFetch, apiFetchBlob, formatAED, formatDate, formatDateShort } from "../../../lib/api";
+import { useStaffSession } from "../../../lib/use-staff-session";
 import { useTheme } from "../../../lib/ThemeContext";
 import {
   AnalyticsCharts,
@@ -86,6 +87,9 @@ function CustomTooltip({ active, payload }: any) {
 
 export default function EarningsPage() {
   const { isDark } = useTheme();
+  const { session } = useStaffSession();
+  const isOwner = session?.role === "OWNER";
+  const [exporting, setExporting] = useState(false);
   const [kpis, setKpis] = useState<Kpis | null>(null);
   const [chartData, setChartData] = useState<RevenueDayPoint[]>([]);
   const [utilization, setUtilization] = useState<TableUtilizationItem[]>([]);
@@ -128,15 +132,60 @@ export default function EarningsPage() {
     }
   }, []);
 
+  const handleExport = useCallback(async () => {
+    setExporting(true);
+    try {
+      const blob = await apiFetchBlob("/admin/payments/export");
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "payments.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
 
   return (
     <div>
-      <header className="mb-6">
-        <h1 className="font-display text-3xl text-th-text">Earnings</h1>
-        <p className="mt-1 text-th-text-secondary">Revenue, trends, and payment history</p>
+      <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="mb-2 text-[11px] uppercase tracking-[0.22em] text-th-text-tertiary">
+            Analytics Surface
+          </div>
+          <h1 className="font-display text-3xl text-th-text">Analytics & Billing</h1>
+          <p className="mt-2 text-th-text-secondary">
+            Revenue trends, utilization, top players, and payment history in one shipped route.
+          </p>
+        </div>
+        {isOwner && (
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex items-center gap-2 rounded-button bg-th-gold px-4 py-2 text-sm font-medium text-black hover:bg-th-gold-hover disabled:opacity-50"
+          >
+            {exporting ? (
+              <>
+                <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-black border-t-transparent" />
+                Exporting…
+              </>
+            ) : (
+              <>
+                <DownloadIcon />
+                Export CSV
+              </>
+            )}
+          </button>
+        )}
       </header>
 
       {error && (
@@ -152,7 +201,7 @@ export default function EarningsPage() {
       )}
 
       {/* KPI row */}
-      <div className="mb-8 grid grid-cols-4 gap-4">
+      <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <KpiCard label="Today's Revenue" value={kpis ? formatAED(kpis.revenueToday) : ""} loading={loading} />
         <KpiCard label="This Week" value={kpis ? formatAED(kpis.revenueWeek) : ""} loading={loading} />
         <KpiCard label="This Month" value={kpis ? formatAED(kpis.revenueMonth) : ""} loading={loading} />
@@ -160,8 +209,9 @@ export default function EarningsPage() {
       </div>
 
       {/* Revenue chart */}
-      <div className="mb-8 rounded-card border border-th-divider bg-th-card p-5">
-        <h2 className="mb-4 text-sm font-medium text-th-text-secondary">Revenue — Last 30 Days</h2>
+      <div className="mb-8 rounded-[24px] border border-th-divider bg-th-card p-6">
+        <h2 className="mb-2 font-display text-xl text-th-text">Revenue Trend</h2>
+        <p className="mb-5 text-sm text-th-text-secondary">Last 30 days of captured center revenue.</p>
         {loading ? (
           <div className="h-64 animate-pulse rounded bg-th-divider" />
         ) : chartData.length === 0 ? (
@@ -204,9 +254,9 @@ export default function EarningsPage() {
       </div>
 
       {/* Recent payments table */}
-      <div className="rounded-card border border-th-divider bg-th-card">
-        <div className="border-b border-th-divider px-5 py-3">
-          <h2 className="text-sm font-medium text-th-text-secondary">Recent Payments</h2>
+      <div className="rounded-[24px] border border-th-divider bg-th-card">
+        <div className="border-b border-th-divider px-6 py-4">
+          <h2 className="font-display text-xl text-th-text">Recent Payments</h2>
         </div>
 
         {loading ? (
@@ -255,5 +305,14 @@ export default function EarningsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <path d="M7 1v8M4 6l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M2 11h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
   );
 }

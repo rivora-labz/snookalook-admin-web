@@ -12,10 +12,37 @@ import type {
   AdminPlayerMatchResult,
 } from "@snook/shared/types";
 import { apiFetch, formatDate, formatAED, ApiError } from "../../../../lib/api";
+import { useStaffSession } from "../../../../lib/use-staff-session";
 
 type ChallengeDirection = "sent" | "received";
 type BookingStatusFilter = "ALL" | BookingState;
 type MatchResultFilter = "ALL" | AdminPlayerMatchResult;
+type PlayerHistoryType = "BOOKING" | "PAYMENT";
+
+interface PaymentHistoryItem {
+  id: string;
+  amount: number;
+  status: string;
+  method: string;
+  createdAt: string;
+  booking: {
+    id: string;
+    host: { id: string; displayName: string; avatarUrl: string | null };
+    table: { tableNumber: number; type: string };
+    startAt: string;
+  };
+}
+
+interface PlayerHistoryRow {
+  id: string;
+  type: PlayerHistoryType;
+  occurredAt: string;
+  headline: string;
+  detail: string;
+  statusLabel: string;
+  statusColor: string;
+  amountFils: number | null;
+}
 
 const TIER_COLOR: Record<SkillTier, string> = {
   BEGINNER: "#CD7F32",
@@ -78,6 +105,79 @@ const CHALLENGE_STATUS_COLOR: Record<string, string> = {
   CANCELLED: "#6B6B6B",
 };
 
+const PAYMENT_STATUS_COLOR: Record<string, string> = {
+  CAPTURED: "#0B3D2E",
+  AUTHORIZED: "#0B3D2E",
+  PENDING: "#F39C12",
+  FAILED: "#E74C3C",
+  REFUNDED: "#3498DB",
+};
+
+function RiskFlags({
+  cancellationsLast30d,
+  noShowCount,
+  refundCount,
+  totalFetched,
+}: {
+  cancellationsLast30d: number;
+  noShowCount: number;
+  refundCount: number;
+  totalFetched: number;
+}) {
+  const highCancels = cancellationsLast30d > 3;
+  const highNoShows = noShowCount > 2;
+  const refundRate = totalFetched > 0 ? refundCount / totalFetched : 0;
+  const highRefunds = refundRate > 0.2;
+
+  if (!highCancels && !highNoShows && !highRefunds && cancellationsLast30d === 0 && noShowCount === 0 && refundCount === 0) {
+    return (
+      <div className="mb-6 flex items-center gap-2 rounded-card border border-[#0B3D2E]/40 bg-[#0B3D2E]/10 px-4 py-2.5 text-xs text-[#2ECC71]">
+        <span>✓</span>
+        <span>No risk flags in recent activity.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-6 rounded-card border border-th-divider bg-th-card p-4">
+      <div className="mb-2 text-xs font-medium text-th-text-secondary">Risk Flags</div>
+      <div className="flex flex-wrap gap-2">
+        <RiskBadge
+          label={`${cancellationsLast30d} cancel${cancellationsLast30d !== 1 ? "s" : ""} (30d)`}
+          alert={highCancels}
+          tooltip="Threshold: >3 cancellations in last 30 days"
+        />
+        <RiskBadge
+          label={`${noShowCount} no-show${noShowCount !== 1 ? "s" : ""}`}
+          alert={highNoShows}
+          tooltip="Threshold: >2 all-time no-shows"
+        />
+        <RiskBadge
+          label={`${(refundRate * 100).toFixed(0)}% refund rate`}
+          alert={highRefunds}
+          tooltip="Threshold: >20% of fetched bookings refunded"
+        />
+      </div>
+    </div>
+  );
+}
+
+function RiskBadge({ label, alert, tooltip }: { label: string; alert: boolean; tooltip: string }) {
+  return (
+    <span
+      title={tooltip}
+      className="inline-block rounded-pill px-2.5 py-1 text-xs font-medium"
+      style={{
+        backgroundColor: alert ? "#E74C3C22" : "var(--th-elevated, #1A1A1A)",
+        color: alert ? "#E74C3C" : "var(--th-text-secondary, #B0B0B0)",
+        border: `1px solid ${alert ? "#E74C3C44" : "var(--th-divider, #2A2A2A)"}`,
+      }}
+    >
+      {alert ? "⚠ " : ""}{label}
+    </span>
+  );
+}
+
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 }
@@ -115,6 +215,9 @@ export default function PlayerDetailPage() {
   const router = useRouter();
   const userId = params?.id ?? "";
 
+  const { session } = useStaffSession();
+  const canMutate = session?.role === "OWNER" || session?.role === "MANAGER";
+
   const [player, setPlayer] = useState<AdminPlayerDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -127,8 +230,10 @@ export default function PlayerDetailPage() {
   const [banSubmitting, setBanSubmitting] = useState(false);
   const [banError, setBanError] = useState<string | null>(null);
 
-  // Unban inline state
+  // Unban dialog
+  const [unbanOpen, setUnbanOpen] = useState(false);
   const [unbanSubmitting, setUnbanSubmitting] = useState(false);
+  const [unbanError, setUnbanError] = useState<string | null>(null);
 
   // Challenges drawer
   const [challengesDir, setChallengesDir] = useState<ChallengeDirection | null>(null);
@@ -141,12 +246,19 @@ export default function PlayerDetailPage() {
   const [bookingsLoading, setBookingsLoading] = useState(true);
   const [bookingsError, setBookingsError] = useState<string | null>(null);
   const [bookingFilter, setBookingFilter] = useState<BookingStatusFilter>("ALL");
+  const [bookingPage, setBookingPage] = useState(0);
 
   // Recent matches
   const [matches, setMatches] = useState<AdminPlayerMatchItem[]>([]);
   const [matchesLoading, setMatchesLoading] = useState(true);
   const [matchesError, setMatchesError] = useState<string | null>(null);
   const [matchFilter, setMatchFilter] = useState<MatchResultFilter>("ALL");
+
+  // Payment-backed activity history
+  const [payments, setPayments] = useState<PaymentHistoryItem[]>([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const [paymentsError, setPaymentsError] = useState<string | null>(null);
+  const [historyPage, setHistoryPage] = useState(0);
 
   const showToast = useCallback((msg: string, tone: "ok" | "err" = "ok") => {
     setToast({ msg, tone });
@@ -182,7 +294,7 @@ export default function PlayerDetailPage() {
       setBookingsLoading(true);
       setBookingsError(null);
       try {
-        const qs = new URLSearchParams({ limit: "10" });
+        const qs = new URLSearchParams({ limit: "50" });
         if (status !== "ALL") qs.set("status", status);
         const resp = await apiFetch<{ items: AdminPlayerBookingItem[] }>(
           `/admin/players/${userId}/bookings?${qs.toString()}`,
@@ -231,15 +343,41 @@ export default function PlayerDetailPage() {
     [userId],
   );
 
+  const fetchPayments = useCallback(async () => {
+    if (!canMutate) {
+      setPayments([]);
+      setPaymentsLoading(false);
+      setPaymentsError(null);
+      return;
+    }
+    setPaymentsLoading(true);
+    setPaymentsError(null);
+    try {
+      const resp = await apiFetch<{ items: PaymentHistoryItem[] }>("/admin/payments?limit=100");
+      setPayments(resp.items.filter((item) => item.booking.host.id === userId));
+    } catch (err) {
+      setPaymentsError(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Failed to load payment history",
+      );
+      setPayments([]);
+    } finally {
+      setPaymentsLoading(false);
+    }
+  }, [canMutate, userId]);
+
   const initialLoad = useCallback(async () => {
     setLoading(true);
     const detail = await fetchPlayer();
     if (detail) {
       // Parallel — independent endpoints.
-      await Promise.all([fetchBookings("ALL"), fetchMatches("ALL")]);
+      await Promise.all([fetchBookings("ALL"), fetchMatches("ALL"), fetchPayments()]);
     }
     setLoading(false);
-  }, [fetchPlayer, fetchBookings, fetchMatches]);
+  }, [fetchPlayer, fetchBookings, fetchMatches, fetchPayments]);
 
   useEffect(() => {
     if (userId) initialLoad();
@@ -249,6 +387,7 @@ export default function PlayerDetailPage() {
   // primed the lists with "ALL"; subsequent filter changes trigger a re-fetch here).
   useEffect(() => {
     if (!loading && !notFound && player) {
+      setBookingPage(0);
       fetchBookings(bookingFilter);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -260,6 +399,10 @@ export default function PlayerDetailPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchFilter]);
+
+  useEffect(() => {
+    setHistoryPage(0);
+  }, [bookings, payments]);
 
   const handleBanSubmit = async () => {
     const trimmed = banReason.trim();
@@ -279,7 +422,7 @@ export default function PlayerDetailPage() {
       setBanReason("");
       showToast("Player banned. Bookings at this center cancelled.", "ok");
       // Cascade-cancelled bookings affect the recent list; refresh it.
-      fetchBookings(bookingFilter);
+      await Promise.all([fetchBookings(bookingFilter), fetchPayments()]);
     } catch (err) {
       const msg =
         err instanceof ApiError
@@ -294,12 +437,14 @@ export default function PlayerDetailPage() {
   };
 
   const handleUnban = async () => {
+    setUnbanError(null);
     setUnbanSubmitting(true);
     try {
       const detail = await apiFetch<AdminPlayerDetail>(`/admin/players/${userId}/unban`, {
         method: "POST",
       });
       setPlayer(detail);
+      setUnbanOpen(false);
       showToast("Player unbanned.", "ok");
     } catch (err) {
       const msg =
@@ -308,11 +453,32 @@ export default function PlayerDetailPage() {
           : err instanceof Error
             ? err.message
             : "Failed to unban player";
+      setUnbanError(msg);
       showToast(msg, "err");
     } finally {
       setUnbanSubmitting(false);
     }
   };
+
+  const historyRows: PlayerHistoryRow[] = [...bookings.map((booking) => ({
+    id: `booking-${booking.id}`,
+    type: "BOOKING" as const,
+    occurredAt: booking.createdAt,
+    headline: booking.status === "CANCELLED" ? "Booking cancelled" : "Booking created",
+    detail: `${booking.clubName} · ${booking.tableLabel} · scheduled ${formatDateTime(booking.scheduledAt)}`,
+    statusLabel: STATE_LABEL[booking.status] ?? booking.status,
+    statusColor: STATE_COLOR[booking.status] ?? "#6B6B6B",
+    amountFils: booking.totalFils,
+  })), ...payments.map((payment) => ({
+    id: `payment-${payment.id}`,
+    type: "PAYMENT" as const,
+    occurredAt: payment.createdAt,
+    headline: payment.status === "REFUNDED" ? "Payment refunded" : "Payment recorded",
+    detail: `Table ${payment.booking.table.tableNumber} · booking ${formatDateTime(payment.booking.startAt)} · ${payment.method}`,
+    statusLabel: payment.status,
+    statusColor: PAYMENT_STATUS_COLOR[payment.status] ?? "#6B6B6B",
+    amountFils: payment.amount,
+  }))].sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime());
 
   const openChallenges = useCallback(
     async (direction: ChallengeDirection) => {
@@ -408,7 +574,8 @@ export default function PlayerDetailPage() {
         <>
           {/* Profile card */}
           <div className="mb-6 rounded-card border border-th-divider bg-th-card p-6">
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="flex items-center gap-4">
               <div className="relative">
                 <div
                   className="flex h-16 w-16 items-center justify-center rounded-full text-2xl font-bold text-black"
@@ -451,6 +618,33 @@ export default function PlayerDetailPage() {
                   Joined {formatDate(player.joinedAt)}
                 </div>
               </div>
+              </div>
+              {canMutate && (
+                <div className="flex flex-wrap gap-2">
+                  {!player.isBanned ? (
+                    <button
+                      onClick={() => {
+                        setBanReason("");
+                        setBanError(null);
+                        setBanOpen(true);
+                      }}
+                      className="rounded-button bg-[#E74C3C] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+                    >
+                      Ban Player
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setUnbanError(null);
+                        setUnbanOpen(true);
+                      }}
+                      className="rounded-button bg-[#0B3D2E] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+                    >
+                      Restore Player
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
             {player.isBanned && player.bannedReason && (
               <div className="mt-4 rounded border border-[#E74C3C]/40 bg-[#E74C3C]/5 p-3 text-xs text-th-text-secondary">
@@ -490,6 +684,19 @@ export default function PlayerDetailPage() {
             </div>
           </div>
 
+          {/* Risk flags */}
+          <RiskFlags
+            cancellationsLast30d={
+              bookings.filter((b) => {
+                const age = Date.now() - new Date(b.scheduledAt).getTime();
+                return b.status === "CANCELLED" && age <= 30 * 24 * 3600_000;
+              }).length
+            }
+            noShowCount={player.noShowCount}
+            refundCount={bookings.filter((b) => b.refundedFils !== null && b.refundedFils > 0).length}
+            totalFetched={bookings.length}
+          />
+
           {/* Skill stats */}
           <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="rounded-card border border-th-divider bg-th-card p-4">
@@ -514,27 +721,6 @@ export default function PlayerDetailPage() {
           <div className="mb-6 rounded-card border border-th-divider bg-th-card p-6">
             <h2 className="mb-4 font-display text-lg text-th-text">Actions</h2>
             <div className="flex flex-wrap gap-3">
-              {!player.isBanned && (
-                <button
-                  onClick={() => {
-                    setBanReason("");
-                    setBanError(null);
-                    setBanOpen(true);
-                  }}
-                  className="rounded-button bg-[#E74C3C] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-                >
-                  Ban Player
-                </button>
-              )}
-              {player.isBanned && (
-                <button
-                  onClick={handleUnban}
-                  disabled={unbanSubmitting}
-                  className="rounded-button bg-[#0B3D2E] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-                >
-                  {unbanSubmitting ? "Unbanning…" : "Unban"}
-                </button>
-              )}
               <button
                 onClick={() => openChallenges("sent")}
                 className="rounded-button border border-th-divider bg-th-bg px-4 py-2 text-sm font-medium text-th-text hover:bg-th-hover"
@@ -548,6 +734,103 @@ export default function PlayerDetailPage() {
                 View Challenges Received
               </button>
             </div>
+          </div>
+
+          {/* Activity history */}
+          <div className="mb-6 rounded-card border border-th-divider bg-th-card">
+            <div className="border-b border-th-divider px-5 py-3">
+              <h2 className="font-display text-lg text-th-text">History</h2>
+              <p className="mt-1 text-xs text-th-text-tertiary">
+                Bookings and payment activity for this player, newest first.
+              </p>
+            </div>
+            {!canMutate ? (
+              <div className="p-6 text-sm text-th-text-tertiary">
+                History is visible to owners and managers only.
+              </div>
+            ) : paymentsLoading && historyRows.length === 0 ? (
+              <div className="space-y-2 p-5">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="h-14 animate-pulse rounded bg-th-divider" />
+                ))}
+              </div>
+            ) : paymentsError ? (
+              <div className="p-6 text-center text-sm text-[#E74C3C]">
+                {paymentsError}
+                <div className="mt-3">
+                  <button
+                    onClick={() => fetchPayments()}
+                    className="rounded-button bg-th-gold px-4 py-1.5 text-xs font-medium text-black hover:bg-th-gold-hover"
+                  >
+                    Retry
+                  </button>
+                </div>
+              </div>
+            ) : historyRows.length === 0 ? (
+              <div className="p-6 text-center text-sm text-th-text-tertiary">
+                No booking or payment history yet.
+              </div>
+            ) : (() => {
+              const PAGE_SIZE = 25;
+              const totalPages = Math.ceil(historyRows.length / PAGE_SIZE);
+              const paged = historyRows.slice(historyPage * PAGE_SIZE, (historyPage + 1) * PAGE_SIZE);
+              return (
+                <>
+                  <ul className="divide-y divide-th-divider/60">
+                    {paged.map((item) => (
+                      <li key={item.id} className="flex flex-wrap items-start justify-between gap-3 px-5 py-4">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm text-th-text">{item.headline}</span>
+                            <span
+                              className="inline-block rounded-pill px-2 py-0.5 text-[10px] font-medium text-white"
+                              style={{ backgroundColor: item.statusColor }}
+                            >
+                              {item.statusLabel}
+                            </span>
+                            <span className="rounded-pill border border-th-divider px-2 py-0.5 text-[10px] font-medium text-th-text-tertiary">
+                              {item.type}
+                            </span>
+                          </div>
+                          <div className="mt-1 text-xs text-th-text-secondary">{item.detail}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs text-th-text-tertiary">{formatDateTime(item.occurredAt)}</div>
+                          {item.amountFils !== null && (
+                            <div className="mt-1 font-mono text-sm text-th-text-secondary">
+                              {formatAED(item.amountFils)}
+                            </div>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between border-t border-th-divider px-5 py-3">
+                      <span className="text-xs text-th-text-tertiary">
+                        Page {historyPage + 1} of {totalPages} · {historyRows.length} total
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setHistoryPage((page) => Math.max(0, page - 1))}
+                          disabled={historyPage === 0}
+                          className="rounded-button border border-th-divider px-3 py-1 text-xs text-th-text-secondary hover:bg-th-hover disabled:opacity-40"
+                        >
+                          ← Prev
+                        </button>
+                        <button
+                          onClick={() => setHistoryPage((page) => Math.min(totalPages - 1, page + 1))}
+                          disabled={historyPage >= totalPages - 1}
+                          className="rounded-button border border-th-divider px-3 py-1 text-xs text-th-text-secondary hover:bg-th-hover disabled:opacity-40"
+                        >
+                          Next →
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
 
           {/* Recent bookings */}
@@ -591,53 +874,83 @@ export default function PlayerDetailPage() {
                   ? "No bookings yet."
                   : `No ${STATE_LABEL[bookingFilter] ?? bookingFilter} bookings.`}
               </div>
-            ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-th-divider text-left text-xs text-th-text-tertiary">
-                    <th className="px-5 py-2 font-medium">Date</th>
-                    <th className="px-5 py-2 font-medium">Club</th>
-                    <th className="px-5 py-2 font-medium">Table</th>
-                    <th className="px-5 py-2 font-medium">Status</th>
-                    <th className="px-5 py-2 font-medium">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bookings.map((b) => (
-                    <tr
-                      key={b.id}
-                      className="border-b border-th-divider/50 last:border-b-0"
-                    >
-                      <td className="px-5 py-2.5 text-th-text-secondary">
-                        {formatDateTime(b.scheduledAt)}
-                      </td>
-                      <td className="px-5 py-2.5 text-th-text-secondary">{b.clubName}</td>
-                      <td className="px-5 py-2.5 text-th-text-secondary">{b.tableLabel}</td>
-                      <td className="px-5 py-2.5">
-                        <span
-                          className="inline-block rounded-pill px-2 py-0.5 text-xs font-medium text-white"
-                          style={{
-                            backgroundColor: STATE_COLOR[b.status] ?? "#6B6B6B",
-                            opacity: b.status === "CANCELLED" ? 0.6 : 1,
-                          }}
-                          title={b.cancelReason ?? undefined}
+            ) : (() => {
+              const PAGE_SIZE = 25;
+              const totalPages = Math.ceil(bookings.length / PAGE_SIZE);
+              const paged = bookings.slice(bookingPage * PAGE_SIZE, (bookingPage + 1) * PAGE_SIZE);
+              return (
+                <>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-th-divider text-left text-xs text-th-text-tertiary">
+                        <th className="px-5 py-2 font-medium">Date</th>
+                        <th className="px-5 py-2 font-medium">Club</th>
+                        <th className="px-5 py-2 font-medium">Table</th>
+                        <th className="px-5 py-2 font-medium">Status</th>
+                        <th className="px-5 py-2 font-medium">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paged.map((b) => (
+                        <tr
+                          key={b.id}
+                          className="border-b border-th-divider/50 last:border-b-0"
                         >
-                          {STATE_LABEL[b.status] ?? b.status}
-                        </span>
-                      </td>
-                      <td className="px-5 py-2.5 font-mono text-th-text-secondary">
-                        {formatAED(b.totalFils)}
-                        {b.refundedFils !== null && b.refundedFils > 0 && (
-                          <div className="text-[10px] text-th-text-tertiary">
-                            refunded {formatAED(b.refundedFils)}
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+                          <td className="px-5 py-2.5 text-th-text-secondary">
+                            {formatDateTime(b.scheduledAt)}
+                          </td>
+                          <td className="px-5 py-2.5 text-th-text-secondary">{b.clubName}</td>
+                          <td className="px-5 py-2.5 text-th-text-secondary">{b.tableLabel}</td>
+                          <td className="px-5 py-2.5">
+                            <span
+                              className="inline-block rounded-pill px-2 py-0.5 text-xs font-medium text-white"
+                              style={{
+                                backgroundColor: STATE_COLOR[b.status] ?? "#6B6B6B",
+                                opacity: b.status === "CANCELLED" ? 0.6 : 1,
+                              }}
+                              title={b.cancelReason ?? undefined}
+                            >
+                              {STATE_LABEL[b.status] ?? b.status}
+                            </span>
+                          </td>
+                          <td className="px-5 py-2.5 font-mono text-th-text-secondary">
+                            {formatAED(b.totalFils)}
+                            {b.refundedFils !== null && b.refundedFils > 0 && (
+                              <div className="text-[10px] text-th-text-tertiary">
+                                refunded {formatAED(b.refundedFils)}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between border-t border-th-divider px-5 py-3">
+                      <span className="text-xs text-th-text-tertiary">
+                        Page {bookingPage + 1} of {totalPages} · {bookings.length} total
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setBookingPage((p) => Math.max(0, p - 1))}
+                          disabled={bookingPage === 0}
+                          className="rounded-button border border-th-divider px-3 py-1 text-xs text-th-text-secondary hover:bg-th-hover disabled:opacity-40"
+                        >
+                          ← Prev
+                        </button>
+                        <button
+                          onClick={() => setBookingPage((p) => Math.min(totalPages - 1, p + 1))}
+                          disabled={bookingPage >= totalPages - 1}
+                          className="rounded-button border border-th-divider px-3 py-1 text-xs text-th-text-secondary hover:bg-th-hover disabled:opacity-40"
+                        >
+                          Next →
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
 
           {/* Recent matches */}
@@ -785,6 +1098,50 @@ export default function PlayerDetailPage() {
                 className="rounded-button bg-[#E74C3C] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
               >
                 {banSubmitting ? "Banning…" : "Confirm Ban"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unban confirm dialog */}
+      {unbanOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="unban-dialog-title"
+          onClick={() => !unbanSubmitting && setUnbanOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-card border border-th-divider bg-th-card p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="unban-dialog-title" className="font-display text-lg text-th-text">
+              Restore {player?.displayName ?? "player"}?
+            </h3>
+            <p className="mt-2 text-sm text-th-text-secondary">
+              This clears the active ban immediately. The audit trail remains intact.
+            </p>
+            {unbanError && (
+              <p className="mt-3 text-xs text-[#E74C3C]" role="alert">
+                {unbanError}
+              </p>
+            )}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setUnbanOpen(false)}
+                disabled={unbanSubmitting}
+                className="rounded-button border border-th-divider bg-th-bg px-4 py-2 text-sm font-medium text-th-text hover:bg-th-hover disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUnban}
+                disabled={unbanSubmitting}
+                className="rounded-button bg-[#0B3D2E] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+              >
+                {unbanSubmitting ? "Restoring…" : "Confirm Restore"}
               </button>
             </div>
           </div>

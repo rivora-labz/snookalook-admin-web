@@ -60,20 +60,22 @@ export default function PlayersPage() {
   }, [search, fetchPlayers]);
 
   return (
-    <div>
-      <header className="mb-6">
+    <div className="flex flex-col gap-6">
+      <header>
+        <div className="mb-2 text-[11px] uppercase tracking-[0.22em] text-th-text-tertiary">
+          Roster Surface
+        </div>
         <h1 className="font-display text-3xl text-th-text">Players</h1>
-        <p className="mt-1 text-th-text-secondary">Players who have booked at your center</p>
+        <p className="mt-2 text-th-text-secondary">Players who have booked at your center.</p>
       </header>
 
-      {/* Search */}
-      <div className="mb-6">
+      <div>
         <input
           type="text"
           placeholder="Search by name or email..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full max-w-md rounded-input border border-th-divider bg-th-card px-4 py-2.5 text-sm text-th-text placeholder-th-text-tertiary outline-none focus:border-th-gold"
+          className="w-full max-w-md rounded-2xl border border-th-divider bg-th-card px-4 py-3 text-sm text-th-text placeholder-th-text-tertiary outline-none focus:border-th-gold"
         />
       </div>
 
@@ -90,7 +92,7 @@ export default function PlayersPage() {
       )}
 
       {/* Player list */}
-      <div className="rounded-card border border-th-divider bg-th-card">
+      <div className="overflow-hidden rounded-[24px] border border-th-divider bg-th-card">
         {loading ? (
           <div className="space-y-2 p-5">
             {Array.from({ length: 8 }).map((_, i) => (
