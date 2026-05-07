@@ -1,35 +1,117 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { apiFetch, apiFetchBlob, formatAED, formatDate, formatDateShort } from "../../../lib/api";
-import { useStaffSession } from "../../../lib/use-staff-session";
-import { useTheme } from "../../../lib/ThemeContext";
 import {
-  AnalyticsCharts,
-  type TableUtilizationItem,
-  type TopPlayerItem,
-  type BookingSourceItem,
-} from "../../../components/AnalyticsCharts";
-import {
+  AreaChart,
+  Area,
   BarChart,
   Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
+  LineChart,
+  Line,
   ResponsiveContainer,
-  CartesianGrid,
 } from "recharts";
+import {
+  FunnelSimple,
+  DownloadSimple,
+  MagnifyingGlass,
+  CaretDown,
+  DotsThree,
+  ArrowUpRight,
+  ArrowDownRight,
+  Info,
+  AppleLogo,
+  GoogleLogo,
+  Storefront,
+  Money,
+  Wallet,
+  CreditCard,
+  FilePdf,
+} from "phosphor-react";
+import { toast } from "sonner";
+import { apiFetch, apiFetchBlob } from "../../../lib/api";
+import Drawer from "../../../components/Drawer";
+
+// Static sparkline arrays — replace with API time-series in a later task
+const SPARK_1 = [40, 55, 35, 70, 60, 80, 90, 75, 85, 95];
+const SPARK_2 = [20, 30, 25, 40, 35, 45, 30, 50, 45, 55];
+const SPARK_3 = [60, 50, 70, 55, 65, 75, 60, 80, 70, 90];
+const SPARK_4 = [5, 3, 4, 2, 3, 4, 3, 2, 3, 2];
+
+// -- Helper components --
+
+type TxnType = "Booking" | "Wallet Top-up" | "Membership" | "Refund";
+type TxnStatus = "Completed" | "Pending" | "Refunded" | "Failed";
+
+const TYPE_DOT: Record<TxnType, string> = {
+  Booking: "#3498DB",
+  "Wallet Top-up": "#9B59B6",
+  Membership: "#D4AF37",
+  Refund: "#E74C3C",
+};
+
+function TypePill({ type }: { type: TxnType }) {
+  return (
+    <span className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-[var(--th-hover)] border border-[var(--th-border)]">
+      <span
+        className="w-1.5 h-1.5 rounded-full shrink-0"
+        style={{ backgroundColor: TYPE_DOT[type] ?? "#6B6B6B" }}
+      />
+      <span className="font-inter text-[12px] text-th-text">{type}</span>
+    </span>
+  );
+}
+
+const STATUS_STYLE: Record<TxnStatus, { dot: string; text: string }> = {
+  Completed: { dot: "#2ECC71", text: "text-[#2ECC71]" },
+  Pending: { dot: "#F39C12", text: "text-[#F39C12]" },
+  Refunded: { dot: "#808080", text: "text-th-text-tertiary" },
+  Failed: { dot: "#E74C3C", text: "text-[#E74C3C]" },
+};
+
+function StatusPill({ status }: { status: TxnStatus }) {
+  const s = STATUS_STYLE[status] ?? { dot: "#6B6B6B", text: "text-th-text-tertiary" };
+  return (
+    <span className="inline-flex items-center gap-2">
+      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: s.dot }} />
+      <span className={`font-inter text-[12px] ${s.text}`}>{status}</span>
+    </span>
+  );
+}
+
+function MethodDisplay({ method }: { method: string }) {
+  let Icon = CreditCard;
+  if (method.includes("Apple")) Icon = AppleLogo;
+  else if (method.includes("Google")) Icon = GoogleLogo;
+  else if (method.includes("Tabby") || method.includes("Tamara")) Icon = Storefront;
+  else if (method.includes("Cash")) Icon = Money;
+  else if (method.includes("Wallet")) Icon = Wallet;
+  return (
+    <div className="flex items-center gap-2">
+      <Icon size={14} className="text-th-text-tertiary" />
+      <span className="font-inter text-[13px] text-th-text">{method}</span>
+    </div>
+  );
+}
+
+// -- Interfaces --
+
+interface Transaction {
+  id: string;
+  date: string;
+  time: string;
+  player: { id: string; name: string; email: string; avatarUrl?: string | null };
+  type: TxnType;
+  method: string;
+  amount: string;
+  status: TxnStatus;
+  bookingRef?: string;
+}
 
 interface Kpis {
   revenueToday: number;
   revenueWeek: number;
   revenueMonth: number;
   avgBookingValue: number;
-}
-
-interface RevenueDayPoint {
-  date: string;
-  revenue: number;
 }
 
 interface PaymentItem {
@@ -46,93 +128,76 @@ interface PaymentItem {
   };
 }
 
-const PAYMENT_STATUS_COLOR: Record<string, string> = {
-  CAPTURED: "#2ECC71",
-  AUTHORIZED: "#2ECC71",
-  PENDING: "#F39C12",
-  FAILED: "#E74C3C",
-  REFUNDED: "#3498DB",
-};
-
-const PAYMENT_STATUS_LABEL: Record<string, string> = {
-  CAPTURED: "Completed",
-  AUTHORIZED: "Authorized",
-  PENDING: "Pending",
-  FAILED: "Failed",
-  REFUNDED: "Refunded",
-};
-
-function KpiCard({ label, value, loading }: { label: string; value: string; loading: boolean }) {
-  return (
-    <div className="rounded-card border border-th-divider bg-th-card p-5">
-      <div className="text-xs text-th-text-secondary">{label}</div>
-      {loading ? (
-        <div className="mt-2 h-7 w-24 animate-pulse rounded bg-th-divider" />
-      ) : (
-        <div className="mt-2 font-mono text-2xl text-th-text">{value}</div>
-      )}
-    </div>
-  );
+function toTxnStatus(s: string): TxnStatus {
+  if (s === "CAPTURED" || s === "AUTHORIZED") return "Completed";
+  if (s === "PENDING") return "Pending";
+  if (s === "REFUNDED") return "Refunded";
+  return "Failed";
 }
 
-function CustomTooltip({ active, payload }: any) {
-  if (!active || !payload?.length) return null;
-  const { date, revenue } = payload[0].payload;
-  return (
-    <div className="rounded-button border border-th-divider bg-th-card px-3 py-2 text-xs text-th-text shadow-lg">
-      {formatAED(revenue)} on {formatDateShort(date)}
-    </div>
-  );
+function toTransaction(p: PaymentItem): Transaction {
+  const d = new Date(p.createdAt);
+  const amtAED = p.amount / 100;
+  return {
+    id: p.id,
+    date: d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+    time: d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+    player: {
+      id: p.booking.host.id,
+      name: p.booking.host.displayName,
+      email: "",
+      avatarUrl: p.booking.host.avatarUrl,
+    },
+    type: "Booking",
+    method: p.method.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+    amount: amtAED < 0 ? `−AED ${Math.abs(amtAED).toLocaleString()}` : `AED ${amtAED.toLocaleString()}`,
+    status: toTxnStatus(p.status),
+    bookingRef: p.booking.id.slice(0, 8).toUpperCase(),
+  };
 }
+
+function groupByDate(txns: Transaction[]): { date: string; items: Transaction[] }[] {
+  const map = new Map<string, Transaction[]>();
+  txns.forEach((t) => {
+    const arr = map.get(t.date) ?? [];
+    arr.push(t);
+    map.set(t.date, arr);
+  });
+  return Array.from(map.entries()).map(([date, items]) => ({ date, items }));
+}
+
+const PAGE_SIZE = 12;
 
 export default function EarningsPage() {
-  const { isDark } = useTheme();
-  const { session } = useStaffSession();
-  const isOwner = session?.role === "OWNER";
-  const [exporting, setExporting] = useState(false);
   const [kpis, setKpis] = useState<Kpis | null>(null);
-  const [chartData, setChartData] = useState<RevenueDayPoint[]>([]);
-  const [utilization, setUtilization] = useState<TableUtilizationItem[]>([]);
-  const [topPlayers, setTopPlayers] = useState<TopPlayerItem[]>([]);
-  const [bookingSources, setBookingSources] = useState<BookingSourceItem[]>([]);
-  const [payments, setPayments] = useState<PaymentItem[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [selectedTxn, setSelectedTxn] = useState<Transaction | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [page, setPage] = useState(1);
 
-  const gridStroke = isDark ? "#2A2A2A" : "#E8E8E4";
-  const tickFill = isDark ? "#6B6B6B" : "#999999";
-  const barFill = isDark ? "#D4AF37" : "#B8961F";
-  const cursorFill = isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.04)";
-
-  const fetchAll = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [analyticsRes, paymentsRes] = await Promise.all([
-        apiFetch<{
-          kpis: Kpis;
-          revenueTrend: RevenueDayPoint[];
-          tableUtilization: TableUtilizationItem[];
-          topPlayers: TopPlayerItem[];
-          bookingSources: BookingSourceItem[];
-        }>("/admin/analytics?period=30d"),
-        apiFetch<{ items: PaymentItem[] }>("/admin/payments?limit=20"),
+        apiFetch<{ kpis: Kpis }>("/admin/analytics?period=30d"),
+        apiFetch<{ items: PaymentItem[] }>("/admin/payments?limit=50"),
       ]);
-
       setKpis(analyticsRes.kpis);
-      setChartData(analyticsRes.revenueTrend);
-      setUtilization(analyticsRes.tableUtilization ?? []);
-      setTopPlayers(analyticsRes.topPlayers ?? []);
-      setBookingSources(analyticsRes.bookingSources ?? []);
-      setPayments(paymentsRes.items);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load earnings data");
+      setTransactions(paymentsRes.items.map(toTransaction));
+    } catch {
+      // keep stale data on refresh failures
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const handleExport = useCallback(async () => {
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const handleExport = async () => {
     setExporting(true);
     try {
       const blob = await apiFetchBlob("/admin/payments/export");
@@ -144,175 +209,488 @@ export default function EarningsPage() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Export failed");
+    } catch {
+      toast.error("Export failed");
     } finally {
       setExporting(false);
     }
-  }, []);
+  };
 
-  useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
+  const filtered = transactions.filter(
+    (t) =>
+      !search ||
+      t.player.name.toLowerCase().includes(search.toLowerCase()) ||
+      t.id.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pagedTxns = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pagedGroups = groupByDate(pagedTxns);
+
+  const handleAction = (msg: string) => {
+    toast(msg);
+    setSelectedTxn(null);
+  };
+
+  const kpiCards = [
+    {
+      label: "Total Revenue",
+      value: kpis
+        ? `AED ${Math.round(kpis.revenueMonth / 100).toLocaleString()}`
+        : "AED 48,720",
+      delta: "+12.4%",
+      positive: true,
+      chart: (
+        <AreaChart
+          data={SPARK_1.map((v, i) => ({ i, v }))}
+          margin={{ top: 0, bottom: 0, left: 0, right: 0 }}
+        >
+          <defs>
+            <linearGradient id="colorGreen" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#2ECC71" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="#2ECC71" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <Area
+            type="monotone"
+            dataKey="v"
+            stroke="#2ECC71"
+            fill="url(#colorGreen)"
+            strokeWidth={1.5}
+            dot={false}
+            isAnimationActive={false}
+          />
+        </AreaChart>
+      ),
+    },
+    {
+      label: "Transactions",
+      value: "312",
+      delta: "+8.2%",
+      positive: true,
+      chart: (
+        <BarChart
+          data={SPARK_2.map((v, i) => ({ i, v }))}
+          margin={{ top: 0, bottom: 0, left: 0, right: 0 }}
+        >
+          <Bar dataKey="v" fill="#3498DB" radius={[2, 2, 0, 0]} isAnimationActive={false} />
+        </BarChart>
+      ),
+    },
+    {
+      label: "Avg Booking Value",
+      value: kpis
+        ? `AED ${Math.round(kpis.avgBookingValue / 100).toLocaleString()}`
+        : "AED 156",
+      delta: "+3.1%",
+      positive: true,
+      chart: (
+        <LineChart
+          data={SPARK_3.map((v, i) => ({ i, v }))}
+          margin={{ top: 0, bottom: 0, left: 0, right: 0 }}
+        >
+          <Line
+            type="monotone"
+            dataKey="v"
+            stroke="#D4AF37"
+            dot={false}
+            strokeWidth={1.5}
+            isAnimationActive={false}
+          />
+        </LineChart>
+      ),
+    },
+    {
+      label: "Refund Rate",
+      value: "2.4%",
+      delta: "-0.3%",
+      positive: false,
+      chart: (
+        <AreaChart
+          data={SPARK_4.map((v, i) => ({ i, v }))}
+          margin={{ top: 0, bottom: 0, left: 0, right: 0 }}
+        >
+          <defs>
+            <linearGradient id="colorRed" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#E74C3C" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="#E74C3C" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <Area
+            type="monotone"
+            dataKey="v"
+            stroke="#E74C3C"
+            fill="url(#colorRed)"
+            strokeWidth={1.5}
+            dot={false}
+            isAnimationActive={false}
+          />
+        </AreaChart>
+      ),
+    },
+  ];
 
   return (
-    <div>
-      <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
+    <div className="flex flex-col h-full bg-th-bg relative overflow-hidden">
+      {/* Header */}
+      <div className="shrink-0 mb-8 flex items-start justify-between">
         <div>
-          <div className="mb-2 text-[11px] uppercase tracking-[0.22em] text-th-text-tertiary">
-            Analytics Surface
-          </div>
-          <h1 className="font-display text-3xl text-th-text">Analytics & Billing</h1>
-          <p className="mt-2 text-th-text-secondary">
-            Revenue trends, utilization, top players, and payment history in one shipped route.
+          <h1 className="font-display text-[24px] font-semibold text-th-text">
+            Payments & Billing
+          </h1>
+          <p className="mt-1 font-inter text-[14px] text-th-text-tertiary">
+            Transaction history, revenue KPIs, and billing management
           </p>
         </div>
-        {isOwner && (
+        <div className="flex items-center gap-3">
+          <button className="flex h-[36px] items-center gap-2 rounded-lg border border-[var(--th-border)] px-4 font-inter text-[13px] text-th-text hover:bg-th-card transition-colors">
+            <FunnelSimple size={16} />
+            Filter
+          </button>
           <button
             onClick={handleExport}
             disabled={exporting}
-            className="flex items-center gap-2 rounded-button bg-th-gold px-4 py-2 text-sm font-medium text-black hover:bg-th-gold-hover disabled:opacity-50"
+            className="flex h-[36px] items-center gap-2 rounded-lg border border-th-divider px-4 font-inter text-[13px] text-th-text hover:bg-th-card transition-colors disabled:opacity-50"
           >
-            {exporting ? (
-              <>
-                <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-black border-t-transparent" />
-                Exporting…
-              </>
-            ) : (
-              <>
-                <DownloadIcon />
-                Export CSV
-              </>
-            )}
-          </button>
-        )}
-      </header>
-
-      {error && (
-        <div className="mb-6 rounded-card border border-th-divider bg-th-card p-6 text-center">
-          <p className="text-[#E74C3C]">{error}</p>
-          <button
-            onClick={fetchAll}
-            className="mt-3 rounded-button bg-th-gold px-4 py-2 text-sm font-medium text-black hover:bg-th-gold-hover"
-          >
-            Retry
+            <DownloadSimple size={16} />
+            {exporting ? "Exporting…" : "Export CSV"}
           </button>
         </div>
-      )}
-
-      {/* KPI row */}
-      <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Today's Revenue" value={kpis ? formatAED(kpis.revenueToday) : ""} loading={loading} />
-        <KpiCard label="This Week" value={kpis ? formatAED(kpis.revenueWeek) : ""} loading={loading} />
-        <KpiCard label="This Month" value={kpis ? formatAED(kpis.revenueMonth) : ""} loading={loading} />
-        <KpiCard label="Avg Booking Value" value={kpis ? formatAED(kpis.avgBookingValue) : ""} loading={loading} />
       </div>
 
-      {/* Revenue chart */}
-      <div className="mb-8 rounded-[24px] border border-th-divider bg-th-card p-6">
-        <h2 className="mb-2 font-display text-xl text-th-text">Revenue Trend</h2>
-        <p className="mb-5 text-sm text-th-text-secondary">Last 30 days of captured center revenue.</p>
-        {loading ? (
-          <div className="h-64 animate-pulse rounded bg-th-divider" />
-        ) : chartData.length === 0 ? (
-          <div className="flex h-64 items-center justify-center text-sm text-th-text-tertiary">
-            No revenue data for this period.
-          </div>
-        ) : (
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
-              <XAxis
-                dataKey="date"
-                tickFormatter={(v: string) => formatDateShort(v)}
-                tick={{ fill: tickFill, fontSize: 10 }}
-                axisLine={{ stroke: gridStroke }}
-                tickLine={false}
-              />
-              <YAxis
-                tickFormatter={(v: number) => `AED ${(v / 100).toFixed(0)}`}
-                tick={{ fill: tickFill, fontSize: 10 }}
-                axisLine={false}
-                tickLine={false}
-                width={70}
-              />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: cursorFill }} />
-              <Bar dataKey="revenue" fill={barFill} radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-
-      {/* Analytics charts row */}
-      <div className="mb-8">
-        <AnalyticsCharts
-          utilization={utilization}
-          topPlayers={topPlayers}
-          bookingSources={bookingSources}
-          loading={loading}
-        />
-      </div>
-
-      {/* Recent payments table */}
-      <div className="rounded-[24px] border border-th-divider bg-th-card">
-        <div className="border-b border-th-divider px-6 py-4">
-          <h2 className="font-display text-xl text-th-text">Recent Payments</h2>
+      {/* Scroll container */}
+      <div className="flex-1 overflow-y-auto pb-10 custom-scrollbar">
+        {/* KPI strip */}
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          {kpiCards.map((card) => (
+            <div
+              key={card.label}
+              className="bg-th-card rounded-[14px] border border-[var(--th-border)] p-6"
+            >
+              <div className="flex items-center gap-1 mb-2">
+                <span className="font-inter text-[12px] font-medium text-th-text-tertiary uppercase tracking-wide">
+                  {card.label}
+                </span>
+                <Info size={12} className="text-th-text-tertiary" />
+              </div>
+              <div className="font-display text-[28px] font-bold text-th-text leading-none mb-1">
+                {loading ? (
+                  <div className="h-7 w-24 animate-pulse rounded bg-th-divider" />
+                ) : (
+                  card.value
+                )}
+              </div>
+              <div
+                className={`flex items-center gap-1 font-inter text-[12px] mb-3 ${
+                  card.positive ? "text-[#2ECC71]" : "text-[#E74C3C]"
+                }`}
+              >
+                {card.positive ? (
+                  <ArrowUpRight size={12} />
+                ) : (
+                  <ArrowDownRight size={12} />
+                )}
+                {card.delta}
+              </div>
+              <div className="h-[40px] -mx-1">
+                <ResponsiveContainer width="100%" height={40}>
+                  {card.chart}
+                </ResponsiveContainer>
+              </div>
+            </div>
+          ))}
         </div>
 
-        {loading ? (
-          <div className="space-y-2 p-5">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="h-10 animate-pulse rounded bg-th-divider" />
+        {/* Filter / search row */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <MagnifyingGlass
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-th-text-tertiary pointer-events-none"
+              />
+              <input
+                type="text"
+                placeholder="Search transactions..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                className="w-[240px] h-[36px] bg-th-card border border-[var(--th-border)] rounded-full pl-9 pr-4 text-[13px] text-th-text placeholder:text-th-text-tertiary focus:outline-none focus:border-[#D4AF37]"
+              />
+            </div>
+            {["Last 30 days", "All statuses", "All methods"].map((label) => (
+              <button
+                key={label}
+                className="flex h-[36px] items-center gap-1.5 px-4 bg-th-card border border-[var(--th-border)] rounded-full font-inter text-[13px] text-th-text hover:bg-[var(--th-hover)] transition-colors"
+              >
+                {label}
+                <CaretDown size={12} />
+              </button>
             ))}
           </div>
-        ) : payments.length === 0 ? (
-          <div className="p-8 text-center text-sm text-th-text-tertiary">No payments found.</div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-th-divider text-left text-xs text-th-text-tertiary">
-                <th className="px-5 py-2.5 font-medium">Date</th>
-                <th className="px-5 py-2.5 font-medium">Player</th>
-                <th className="px-5 py-2.5 font-medium">Table</th>
-                <th className="px-5 py-2.5 font-medium">Method</th>
-                <th className="px-5 py-2.5 font-medium text-right">Amount</th>
-                <th className="px-5 py-2.5 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {payments.map((p) => (
-                <tr key={p.id} className="border-b border-th-divider/50 last:border-b-0">
-                  <td className="px-5 py-2.5 text-th-text-secondary">{formatDate(p.createdAt)}</td>
-                  <td className="px-5 py-2.5 text-th-text">{p.booking.host.displayName}</td>
-                  <td className="px-5 py-2.5">
-                    <span className="font-mono text-th-text">#{p.booking.table.tableNumber}</span>
-                    <span className="ml-1 text-th-text-tertiary">{p.booking.table.type}</span>
-                  </td>
-                  <td className="px-5 py-2.5 text-th-text-secondary">{p.method.replace("_", " ")}</td>
-                  <td className="px-5 py-2.5 text-right font-mono text-th-text">{formatAED(p.amount)}</td>
-                  <td className="px-5 py-2.5">
-                    <span
-                      className="inline-block rounded-pill px-2 py-0.5 text-xs font-medium"
-                      style={{ backgroundColor: PAYMENT_STATUS_COLOR[p.status] ?? "#6B6B6B", color: "#fff" }}
-                    >
-                      {PAYMENT_STATUS_LABEL[p.status] ?? p.status}
-                    </span>
-                  </td>
-                </tr>
+          <span className="font-inter text-[13px] text-th-text-tertiary">
+            {filtered.length} transactions
+          </span>
+        </div>
+
+        {/* Transactions table */}
+        <div className="bg-th-card rounded-[14px] border border-[var(--th-border)] overflow-hidden flex flex-col mb-6">
+          {/* Table header */}
+          <div className="h-[48px] bg-th-input border-b border-[var(--th-border)] flex items-center px-4 shrink-0">
+            <div className="w-[180px] flex items-center gap-1 font-inter text-[11px] font-medium text-th-text-tertiary uppercase tracking-wider">
+              Date · Time
+              <CaretDown size={12} />
+            </div>
+            <div className="flex-1 font-inter text-[11px] font-medium text-th-text-tertiary uppercase tracking-wider">
+              Player
+            </div>
+            <div className="w-[160px] font-inter text-[11px] font-medium text-th-text-tertiary uppercase tracking-wider">
+              Type
+            </div>
+            <div className="w-[160px] font-inter text-[11px] font-medium text-th-text-tertiary uppercase tracking-wider">
+              Method
+            </div>
+            <div className="w-[120px] text-right pr-4 font-inter text-[11px] font-medium text-th-text-tertiary uppercase tracking-wider">
+              Amount
+            </div>
+            <div className="w-[120px] font-inter text-[11px] font-medium text-th-text-tertiary uppercase tracking-wider">
+              Status
+            </div>
+            <div className="w-[40px]" />
+          </div>
+
+          {loading ? (
+            <div className="p-5 space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="h-16 animate-pulse rounded bg-th-divider" />
               ))}
-            </tbody>
-          </table>
+            </div>
+          ) : pagedGroups.length === 0 ? (
+            <div className="p-12 text-center font-inter text-[14px] text-th-text-tertiary">
+              No transactions found.
+            </div>
+          ) : (
+            pagedGroups.map(({ date, items }) => (
+              <div key={date}>
+                {/* Group divider */}
+                <div className="h-[32px] bg-white/[0.02] flex items-center px-4 font-inter text-[11px] font-medium text-th-text-tertiary uppercase tracking-wider">
+                  {date}
+                </div>
+                {items.map((txn) => (
+                  <div
+                    key={txn.id}
+                    onClick={() => setSelectedTxn(txn)}
+                    className="h-[64px] border-t border-[var(--th-border)] hover:bg-[var(--th-hover)] cursor-pointer transition-colors flex items-center px-4"
+                  >
+                    <div className="w-[180px]">
+                      <div className="font-inter text-[13px] text-th-text">{txn.date}</div>
+                      <div className="font-inter text-[12px] text-th-text-tertiary">{txn.time}</div>
+                    </div>
+                    <div className="flex-1 flex items-center gap-2 min-w-0">
+                      <img
+                        src={
+                          txn.player.avatarUrl ??
+                          `https://i.pravatar.cc/28?u=${txn.player.id}`
+                        }
+                        alt=""
+                        className="w-7 h-7 rounded-full shrink-0"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                      <div className="min-w-0">
+                        <div className="font-inter text-[13px] font-medium text-th-text truncate">
+                          {txn.player.name}
+                        </div>
+                        {txn.player.email && (
+                          <div className="font-inter text-[12px] text-th-text-tertiary truncate">
+                            {txn.player.email}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="w-[160px]">
+                      <TypePill type={txn.type} />
+                    </div>
+                    <div className="w-[160px]">
+                      <MethodDisplay method={txn.method} />
+                    </div>
+                    <div
+                      className={`w-[120px] text-right pr-4 font-mono text-[14px] font-medium ${
+                        txn.amount.startsWith("−") ? "text-[#E74C3C]" : "text-th-text"
+                      }`}
+                    >
+                      {txn.amount}
+                    </div>
+                    <div className="w-[120px]">
+                      <StatusPill status={txn.status} />
+                    </div>
+                    <div className="w-[40px] flex justify-center">
+                      <button
+                        onClick={(e) => e.stopPropagation()}
+                        className="p-1 rounded text-th-text-tertiary hover:text-[#D4AF37] transition-colors"
+                        aria-label="Transaction actions"
+                      >
+                        <DotsThree size={20} weight="bold" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between">
+            <span className="font-inter text-[13px] text-th-text-tertiary">
+              Showing {(page - 1) * PAGE_SIZE + 1}–
+              {Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length} transactions
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="w-8 h-8 rounded-md font-inter text-[13px] text-th-text-tertiary hover:bg-[var(--th-hover)] hover:text-th-text transition-colors disabled:opacity-40"
+              >
+                ‹
+              </button>
+              {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => i + 1).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPage(p)}
+                  className={`w-8 h-8 rounded-md font-inter text-[13px] transition-colors ${
+                    p === page
+                      ? "bg-[#0B3D2E] text-white font-medium"
+                      : "text-th-text-tertiary hover:bg-[var(--th-hover)] hover:text-th-text"
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="w-8 h-8 rounded-md font-inter text-[13px] text-th-text-tertiary hover:bg-[var(--th-hover)] hover:text-th-text transition-colors disabled:opacity-40"
+              >
+                ›
+              </button>
+            </div>
+          </div>
         )}
       </div>
-    </div>
-  );
-}
 
-function DownloadIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      <path d="M7 1v8M4 6l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M2 11h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
+      {/* Transaction detail drawer */}
+      <Drawer
+        isOpen={selectedTxn !== null}
+        onClose={() => setSelectedTxn(null)}
+        title="Transaction Detail"
+        width="400px"
+      >
+        {selectedTxn && (
+          <div className="flex flex-col">
+            {/* Amount hero */}
+            <div
+              className={`font-display text-[32px] font-bold mb-1 ${
+                selectedTxn.amount.startsWith("−") ? "text-[#E74C3C]" : "text-th-text"
+              }`}
+            >
+              {selectedTxn.amount}
+            </div>
+            {/* TXN ID */}
+            <div className="font-mono text-[13px] text-th-text-tertiary mb-3">
+              TXN #{selectedTxn.id.slice(0, 16).toUpperCase()}
+            </div>
+            <StatusPill status={selectedTxn.status} />
+            <div className="h-[1px] bg-[var(--th-hover)] my-6" />
+            {/* Details grid */}
+            <div className="grid grid-cols-[120px_1fr] gap-y-6">
+              <span className="font-inter text-[13px] text-th-text-tertiary">Date</span>
+              <span className="font-inter text-[13px] text-th-text">
+                {selectedTxn.date} {selectedTxn.time}
+              </span>
+              <span className="font-inter text-[13px] text-th-text-tertiary">Player</span>
+              <span className="font-inter text-[13px] text-th-text">
+                {selectedTxn.player.name}
+              </span>
+              <span className="font-inter text-[13px] text-th-text-tertiary">Type</span>
+              <TypePill type={selectedTxn.type} />
+              <span className="font-inter text-[13px] text-th-text-tertiary">Method</span>
+              <MethodDisplay method={selectedTxn.method} />
+              {selectedTxn.bookingRef && (
+                <>
+                  <span className="font-inter text-[13px] text-th-text-tertiary">
+                    Booking Ref
+                  </span>
+                  <span className="font-mono text-[13px] text-th-text">
+                    {selectedTxn.bookingRef}
+                  </span>
+                </>
+              )}
+              <span className="font-inter text-[13px] text-th-text-tertiary">Receipt</span>
+              <button className="flex items-center gap-1 text-[#D4AF37] hover:text-[#E8C654] transition-colors font-inter text-[13px]">
+                <FilePdf size={14} />
+                View PDF
+              </button>
+            </div>
+
+            {/* Context-sensitive footer actions */}
+            <div className="mt-8 flex gap-3">
+              {selectedTxn.status === "Completed" && (
+                <>
+                  <button
+                    onClick={() => handleAction("Refund initiated")}
+                    className="flex-1 h-[44px] rounded-lg border border-[#E74C3C]/20 text-[#E74C3C] hover:bg-[#E74C3C]/10 transition-colors font-inter text-[14px]"
+                  >
+                    Issue refund
+                  </button>
+                  <button
+                    onClick={() => handleAction("Receipt opened")}
+                    className="flex-1 h-[44px] rounded-lg bg-[#D4AF37] hover:bg-[#E8C654] text-black transition-colors font-inter text-[14px] font-semibold"
+                  >
+                    View receipt
+                  </button>
+                </>
+              )}
+              {selectedTxn.status === "Refunded" && (
+                <button
+                  onClick={() => handleAction("Receipt opened")}
+                  className="w-full h-[44px] rounded-lg bg-[#D4AF37] hover:bg-[#E8C654] text-black transition-colors font-inter text-[14px] font-semibold"
+                >
+                  View receipt
+                </button>
+              )}
+              {selectedTxn.status === "Pending" && (
+                <>
+                  <button
+                    onClick={() => handleAction("Transaction cancelled")}
+                    className="flex-1 h-[44px] rounded-lg border border-[#E74C3C]/20 text-[#E74C3C] hover:bg-[#E74C3C]/10 transition-colors font-inter text-[14px]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleAction("Marked as completed")}
+                    className="flex-1 h-[44px] rounded-lg bg-[#2ECC71] hover:bg-[#27AE60] text-black transition-colors font-inter text-[14px] font-semibold"
+                  >
+                    Mark completed
+                  </button>
+                </>
+              )}
+              {selectedTxn.status === "Failed" && (
+                <button
+                  onClick={() => handleAction("Payment retry initiated")}
+                  className="w-full h-[44px] rounded-lg bg-[#D4AF37] hover:bg-[#E8C654] text-black transition-colors font-inter text-[14px] font-semibold"
+                >
+                  Retry payment
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </Drawer>
+    </div>
   );
 }

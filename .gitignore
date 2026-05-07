@@ -1,7 +1,9 @@
 .vercel
+.turbo
 node_modules
 .next
 out
+coverage
 .npmrc
 .env
 .env.local

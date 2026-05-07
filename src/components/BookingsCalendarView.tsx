@@ -136,9 +136,12 @@ const STATE_TEXT: Record<string, string> = {
 // ─── Component ───────────────────────────────────────────────────────────────
 interface Props {
   activeCenterId: string | null;
+  onSelectBooking?: (booking: CalBookingItem) => void;
 }
 
-export default function BookingsCalendarView({ activeCenterId }: Props) {
+export { type CalBookingItem };
+
+export default function BookingsCalendarView({ activeCenterId, onSelectBooking }: Props) {
   const router = useRouter();
   const [weekOffset, setWeekOffset] = useState(0);
   const [bookings, setBookings] = useState<CalBookingItem[]>([]);
@@ -434,7 +437,9 @@ export default function BookingsCalendarView({ activeCenterId }: Props) {
                                   <button
                                     key={b.id}
                                     onClick={() =>
-                                      router.push(`/bookings/${b.id}` as Route)
+                                      onSelectBooking
+                                        ? onSelectBooking(b)
+                                        : router.push(`/bookings/${b.id}` as Route)
                                     }
                                     aria-label={`${b.host.displayName} table #${t.tableNumber} — ${b.state}`}
                                     title={`${b.host.displayName} · Table #${t.tableNumber} · ${b.durationMinutes / 60}h · ${b.state}`}

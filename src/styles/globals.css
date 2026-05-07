@@ -27,6 +27,8 @@
   --th-gold-bg: rgba(212, 175, 55, 0.1);
   --th-hover: rgba(255, 255, 255, 0.05);
   --th-active: rgba(255, 255, 255, 0.08);
+  --th-overlay: rgba(0, 0, 0, 0.6);
+  --th-shadow-modal: 0 25px 60px rgba(0, 0, 0, 0.5);
 }
 
 .theme-light {
@@ -47,6 +49,8 @@
   --th-gold-bg: rgba(184, 150, 31, 0.08);
   --th-hover: rgba(0, 0, 0, 0.04);
   --th-active: rgba(0, 0, 0, 0.06);
+  --th-overlay: rgba(0, 0, 0, 0.4);
+  --th-shadow-modal: 0 25px 60px rgba(0, 0, 0, 0.25);
 }
 
 html,
@@ -56,4 +60,31 @@ body {
   font-family: Inter, system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+@layer utilities {
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .shadow-gold-glow {
+    box-shadow: 0 0 16px rgba(212, 175, 55, 0.4);
+  }
+  .shadow-glass {
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: var(--th-border) transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--th-border);
+    border-radius: 2px;
+  }
 }

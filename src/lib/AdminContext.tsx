@@ -14,7 +14,7 @@ interface AdminContextValue {
 const AdminContext = createContext<AdminContextValue | undefined>(undefined);
 
 export function AdminProvider({ children }: { children: ReactNode }) {
-  const [dateRange, setDateRange] = useState("Today, 20 April");
+  const [dateRange, setDateRange] = useState("Today");
   const [isBookingOpen, setIsBookingOpen] = useState(false);
   const [isActivityOpen, setIsActivityOpen] = useState(false);
 
