@@ -240,9 +240,7 @@ export default function EarningsPage() {
   const kpiCards = [
     {
       label: "Total Revenue",
-      value: kpis
-        ? formatAED(kpis.revenueMonth)
-        : "AED 48,720",
+      value: kpis ? formatAED(kpis.revenueMonth) : formatAED(0),
       delta: "+12.4%",
       positive: true,
       chart: (
@@ -264,7 +262,7 @@ export default function EarningsPage() {
     },
     {
       label: "Avg Booking Value",
-      value: kpis ? formatAED(kpis.avgBookingValue) : "AED 156",
+      value: kpis ? formatAED(kpis.avgBookingValue) : formatAED(0),
       delta: "+3.1%",
       positive: true,
       chart: <SparklineLine data={SPARK_3.map((v, i) => ({ i, v }))} stroke="#D4AF37" height={40} />,
