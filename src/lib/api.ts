@@ -1,7 +1,8 @@
 import { createClient } from "./supabase/client";
 import { API_BASE } from "./api-base";
+import { getRuntimeAuthMode, readAdminAccessTokenCookie } from "./runtime-auth";
 
-const AUTH_MODE = process.env.NEXT_PUBLIC_AUTH_MODE ?? "dev";
+const AUTH_MODE = getRuntimeAuthMode();
 
 // Dev-only fallback: backend (NODE_ENV !== "production") accepts
 // `X-Dev-User: <userId>` instead of a real Supabase JWT. Set
@@ -17,6 +18,11 @@ async function getAuthHeader(): Promise<Record<string, string>> {
       return { Authorization: `Bearer ${session.access_token}` };
     }
     return {};
+  }
+
+  if (AUTH_MODE === "backend") {
+    const accessToken = readAdminAccessTokenCookie();
+    return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
   }
 
   if (DEV_USER_ID) {
@@ -37,7 +43,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     },
   });
 
-  if (res.status === 401 && AUTH_MODE === "supabase" && typeof window !== "undefined") {
+  if (res.status === 401 && AUTH_MODE !== "dev" && typeof window !== "undefined") {
     window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
     throw new ApiError(401, "UNAUTHORIZED", "Session expired.");
   }
@@ -50,12 +56,40 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   return res.json();
 }
 
+export interface RetryOpts {
+  retries?: number;
+  baseMs?: number;
+}
+
+export async function apiFetchRetry<T>(
+  path: string,
+  init?: RequestInit,
+  retryOpts: RetryOpts = {},
+): Promise<T> {
+  const retries = retryOpts.retries ?? 3;
+  const baseMs = retryOpts.baseMs ?? 1000;
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await apiFetch<T>(path, init);
+    } catch (err) {
+      lastErr = err;
+      const isApiErr = err instanceof ApiError;
+      const retryable = !isApiErr || (err.status >= 500 && err.status < 600);
+      if (!retryable || attempt === retries) break;
+      const delay = baseMs * Math.pow(2, attempt);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw lastErr;
+}
+
 export async function apiFetchBlob(path: string): Promise<Blob> {
   const authHeader = await getAuthHeader();
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { ...authHeader },
   });
-  if (res.status === 401 && AUTH_MODE === "supabase" && typeof window !== "undefined") {
+  if (res.status === 401 && AUTH_MODE !== "dev" && typeof window !== "undefined") {
     window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
     throw new ApiError(401, "UNAUTHORIZED", "Session expired.");
   }
@@ -75,7 +109,7 @@ export async function apiFetchFormData<T>(path: string, body: FormData): Promise
     body,
   });
 
-  if (res.status === 401 && AUTH_MODE === "supabase" && typeof window !== "undefined") {
+  if (res.status === 401 && AUTH_MODE !== "dev" && typeof window !== "undefined") {
     window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
     throw new ApiError(401, "UNAUTHORIZED", "Session expired.");
   }
@@ -99,19 +133,5 @@ export class ApiError extends Error {
   }
 }
 
-export function formatAED(fils: number): string {
-  return `AED ${(fils / 100).toFixed(2)}`;
-}
-
-export function formatDate(iso: string): string {
-  const d = new Date(iso);
-  const day = d.getDate();
-  const month = d.toLocaleString("en-GB", { month: "short" });
-  const year = d.getFullYear();
-  return `${day} ${month} ${year}`;
-}
-
-export function formatDateShort(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getDate()} ${d.toLocaleString("en-GB", { month: "short" })}`;
-}
+export { formatAED } from "./currency";
+export { formatDate, formatDateShort } from "./datetime";

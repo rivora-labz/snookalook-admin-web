@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatDateShort, formatTime } from "../../lib/datetime";
 
 const STATUS_COLOR: Record<string, string> = {
   COMPLETE: "#2ECC71",
@@ -55,12 +56,7 @@ export default function AgentGrid({
               </span>
               {a.lastReportMtime && (
                 <span className="text-th-text-tertiary">
-                  · {new Date(a.lastReportMtime).toLocaleString("en-GB", {
-                    day: "2-digit",
-                    month: "short",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+                  · {`${formatDateShort(a.lastReportMtime)} ${formatTime(a.lastReportMtime)}`}
                 </span>
               )}
             </div>

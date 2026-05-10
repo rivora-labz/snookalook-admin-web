@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
+import Image from "next/image";
 import type { TableStatus, TableType } from "@rivora-labz/snook-shared";
 import {
   GridFour,
@@ -12,6 +13,7 @@ import {
   Plus,
 } from "phosphor-react";
 import { apiFetch, formatAED } from "../../../lib/api";
+import { formatTime } from "../../../lib/datetime";
 import AddTableModal from "../../../components/AddTableModal";
 import EditTableModal, { type EditableTable } from "../../../components/EditTableModal";
 
@@ -131,9 +133,6 @@ export default function TablesIndexClient() {
     [tables, tab]
   );
 
-  const formatTime = (iso: string) =>
-    new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-
   return (
     <div className="flex flex-col h-full bg-th-bg -m-8 pb-12">
       {/* Header */}
@@ -246,12 +245,15 @@ export default function TablesIndexClient() {
                   {showPlayerRow && (
                     <div className="mt-3 flex items-center gap-2 bg-th-elevated p-2 rounded-lg border border-th-divider">
                       {t.status === "IN_PLAY" && booking && (
-                        <img
+                        <Image
                           src={
                             booking.host.avatarUrl ??
                             `https://i.pravatar.cc/24?u=${booking.host.id}`
                           }
                           alt=""
+                          width={24}
+                          height={24}
+                          unoptimized
                           className="w-6 h-6 rounded-full"
                           onError={(e) => {
                             (e.target as HTMLImageElement).style.display = "none";

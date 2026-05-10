@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import Image from "next/image";
 import { X, Check, WarningCircle } from "phosphor-react";
 import { Toaster, toast } from "sonner";
 import AdminNav from "./AdminNav";
@@ -157,8 +158,11 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
             <div className="relative">
               {bookingPlayerAvatar && (
                 <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                  <img
+                  <Image
                     src={`https://i.pravatar.cc/100?u=${bookingPlayerAvatar}`}
+                    width={20}
+                    height={20}
+                    unoptimized
                     className="w-5 h-5 rounded-full"
                     alt=""
                   />
@@ -188,8 +192,11 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
                     className="px-3 h-[36px] flex items-center justify-between hover:bg-[var(--th-hover)] cursor-pointer transition-colors"
                   >
                     <div className="flex items-center gap-3">
-                      <img
+                      <Image
                         src={`https://i.pravatar.cc/100?u=${p.avatar}`}
+                        width={24}
+                        height={24}
+                        unoptimized
                         className="w-6 h-6 rounded-full"
                         alt=""
                       />

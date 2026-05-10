@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 
 interface PlayerAvatarProps {
   url: string | null;
@@ -26,10 +27,12 @@ export default function PlayerAvatar({
       style={{ width: size, height: size, backgroundColor: bgColor, color: "#1A1A1A" }}
     >
       {showImage ? (
-        <img
+        <Image
           src={url}
           alt=""
-          loading="lazy"
+          width={size}
+          height={size}
+          unoptimized
           onError={() => setFailed(true)}
           className="h-full w-full object-cover"
         />

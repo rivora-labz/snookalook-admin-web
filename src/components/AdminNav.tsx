@@ -2,7 +2,10 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { createClient } from "../lib/supabase/client";
+import { clearAdminAccessTokenCookie, getRuntimeAuthMode } from "../lib/runtime-auth";
+import { useStaffSession } from "../lib/use-staff-session";
 import {
   SquaresFour,
   GridFour,
@@ -12,9 +15,10 @@ import {
   CreditCard,
   Gear,
   SignOut,
+  Trophy,
 } from "phosphor-react";
 
-const AUTH_MODE = process.env.NEXT_PUBLIC_AUTH_MODE ?? "dev";
+const AUTH_MODE = getRuntimeAuthMode();
 
 interface NavItem {
   href: string;
@@ -28,13 +32,18 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Tables", icon: GridFour, end: true },
   { href: "/bookings", label: "Bookings", icon: Calendar },
   { href: "/players", label: "Players", icon: Users },
-  { href: "/earnings", label: "Analytics", icon: ChartLineUp },
+  { href: "/analytics", label: "Analytics", icon: ChartLineUp },
+  { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
   { href: "/earnings", label: "Payments", icon: CreditCard },
   { href: "/settings", label: "Settings", icon: Gear },
 ];
 
 export default function AdminNav() {
   const pathname = usePathname();
+  const { session } = useStaffSession();
+  const centerName = session?.centerName ?? "Center";
+  const operatorName = session?.userDisplayName ?? "Staff";
+  const operatorRole = session?.role ?? "STAFF";
 
   return (
     <div className="w-[240px] flex-shrink-0 h-full border-r border-th-card bg-th-bg flex flex-col pt-6 pb-6">
@@ -55,7 +64,7 @@ export default function AdminNav() {
       <div className="px-6 mb-6">
         <button className="flex items-center justify-between w-full p-3 bg-th-card rounded-xl border border-th-border hover:bg-th-divider transition-colors">
           <span className="font-display text-[14px] font-medium text-th-text truncate">
-            Grand Snooker Hub
+            {centerName}
           </span>
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
             <path d="M3 4.5L6 7.5L9 4.5" stroke="var(--th-text-tertiary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -102,18 +111,21 @@ export default function AdminNav() {
       <div className="px-6 mt-auto flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-[40px] h-[40px] rounded-full overflow-hidden border border-th-border-medium">
-            <img
+            <Image
               src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop"
               alt="Admin"
+              width={40}
+              height={40}
+              unoptimized
               className="w-full h-full object-cover"
             />
           </div>
           <div className="flex flex-col">
             <span className="font-inter text-[13px] font-medium text-th-text">
-              Hassan A.
+              {operatorName}
             </span>
             <span className="font-inter text-[11px] text-th-text-tertiary">
-              Manager
+              {operatorRole}
             </span>
           </div>
         </div>
@@ -131,6 +143,10 @@ export default function AdminNav() {
           </button>
         ) : (
           <button
+            onClick={() => {
+              clearAdminAccessTokenCookie();
+              window.location.href = "/login";
+            }}
             className="text-th-text-tertiary hover:text-th-text transition-colors"
             title="Sign out"
           >

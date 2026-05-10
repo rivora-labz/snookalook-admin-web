@@ -13,6 +13,7 @@ import {
 } from "phosphor-react";
 import Button from "./Button";
 import { useAdmin } from "../lib/AdminContext";
+import { formatDate } from "../lib/datetime";
 import { useTheme } from "../lib/ThemeContext";
 
 const DATE_OPTIONS = ["Today", "Yesterday", "Last 7 days", "Last 30 days"];
@@ -57,12 +58,7 @@ export default function AdminHeader() {
           {getPageTitle()}
         </h1>
         <span className="font-inter text-[12px] text-th-text-tertiary">
-          {new Date().toLocaleDateString("en-US", {
-            weekday: "long",
-            month: "long",
-            day: "numeric",
-            year: "numeric",
-          })}
+          {formatDate(new Date(), { weekday: "long", month: "long" })}
         </span>
       </div>
 

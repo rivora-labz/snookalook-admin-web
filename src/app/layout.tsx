@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Toaster } from "sonner";
 import "../styles/globals.css";
 import { ThemeProvider } from "../lib/ThemeContext";
 
@@ -21,6 +22,13 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen bg-th-bg text-th-text">
         <ThemeProvider>{children}</ThemeProvider>
+        <Toaster
+          position="top-right"
+          theme="dark"
+          richColors
+          closeButton
+          toastOptions={{ duration: 4000 }}
+        />
       </body>
     </html>
   );

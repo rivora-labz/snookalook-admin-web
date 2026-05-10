@@ -1,11 +1,18 @@
 "use client";
 
 import { createClient } from "../../lib/supabase/client";
+import { clearAdminAccessTokenCookie, getRuntimeAuthMode } from "../../lib/runtime-auth";
+
+const AUTH_MODE = getRuntimeAuthMode();
 
 export default function ForbiddenPage() {
   const handleSignOut = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    if (AUTH_MODE === "supabase") {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    } else {
+      clearAdminAccessTokenCookie();
+    }
     window.location.href = "/login";
   };
 

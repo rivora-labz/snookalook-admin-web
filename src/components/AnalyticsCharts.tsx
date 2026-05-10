@@ -185,7 +185,7 @@ export function AnalyticsCharts({ utilization, topPlayers, bookingSources, loadi
               <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} horizontal={false} />
               <XAxis
                 type="number"
-                tickFormatter={(v: number) => `AED ${(v / 100).toFixed(0)}`}
+                tickFormatter={(v: number) => formatAED(v, { decimals: 0 })}
                 tick={{ fill: tickFill, fontSize: 10 }}
                 axisLine={{ stroke: gridStroke }}
                 tickLine={false}

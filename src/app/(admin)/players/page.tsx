@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { MagnifyingGlass, Funnel, DotsThree, Users, UserPlus } from "phosphor-react";
 import type { SkillTier } from "@rivora-labz/snook-shared";
-import { apiFetch } from "../../../lib/api";
+import { apiFetch, formatAED } from "../../../lib/api";
+import { formatDate } from "../../../lib/datetime";
 import PlayerAvatar from "../../../components/PlayerAvatar";
 
 interface PlayerItem {
@@ -236,20 +237,13 @@ export default function PlayersPage() {
                       </span>
                     </td>
                     <td className="py-3 px-6 text-right font-mono text-[14px] text-th-text">
-                      {p.spend != null ? `AED ${p.spend.toLocaleString()}` : "—"}
+                      {p.spend != null ? formatAED(p.spend) : "—"}
                     </td>
                     <td className="py-3 px-6 text-center font-inter text-[14px] text-th-text-secondary">
                       {p.matchesPlayed ?? p.gamesPlayed ?? "—"}
                     </td>
                     <td className="py-3 px-6 font-inter text-[13px] text-th-text-secondary">
-                      {p.lastVisit ??
-                        (p.joinedAt
-                          ? new Date(p.joinedAt).toLocaleDateString("en-GB", {
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric",
-                            })
-                          : "—")}
+                      {p.lastVisit ?? (p.joinedAt ? formatDate(p.joinedAt) : "—")}
                     </td>
                     <td className="py-3 px-6">
                       <div className="flex items-center gap-2">

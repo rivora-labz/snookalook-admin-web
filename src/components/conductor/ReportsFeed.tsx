@@ -1,5 +1,7 @@
 "use client";
 
+import { formatDateShort, formatTime } from "../../lib/datetime";
+
 const STATUS_COLOR: Record<string, string> = {
   COMPLETE: "#2ECC71",
   DONE: "#2ECC71",
@@ -49,12 +51,7 @@ export default function ReportsFeed({
                 )}
                 <span className="flex-1 truncate text-th-text">{r.name}</span>
                 <span className="text-[10px] text-th-text-tertiary">
-                  {new Date(r.mtime).toLocaleString("en-GB", {
-                    day: "2-digit",
-                    month: "short",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+                  {`${formatDateShort(r.mtime)} ${formatTime(r.mtime)}`}
                 </span>
               </button>
             </li>

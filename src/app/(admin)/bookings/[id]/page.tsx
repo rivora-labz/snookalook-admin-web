@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import type { Route } from "next";
 import type { BookingState } from "@rivora-labz/snook-shared";
-import { apiFetch, formatAED, formatDate, ApiError } from "../../../../lib/api";
+import { apiFetch, formatAED, ApiError } from "../../../../lib/api";
+import { formatDate, formatTime, formatDateTime } from "../../../../lib/datetime";
 
 interface BookingDetail {
   id: string;
@@ -79,13 +80,6 @@ const PAYMENT_STATUS_LABEL: Record<string, string> = {
   REFUNDED: "Refunded",
 };
 
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-}
-
-function formatDateTime(iso: string): string {
-  return `${formatDate(iso)} ${formatTime(iso)}`;
-}
 
 function StatusPill({ state }: { state: string }) {
   return (

@@ -6,6 +6,7 @@ import type { Route } from "next";
 import type { BookingState } from "@rivora-labz/snook-shared";
 import { apiFetch, ApiError } from "../lib/api";
 import { STATUS_TOKEN, STATUS_TOKEN_TEXT } from "../lib/status-tokens";
+import { formatDate } from "../lib/datetime";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const TIMELINE_START_HOUR = 8;
@@ -58,10 +59,7 @@ function getWeekBounds(offset: number): { start: Date; end: Date; days: string[]
 }
 
 function formatWeekRange(days: string[]): string {
-  const fmt = (ds: string) => {
-    const d = new Date(ds + "T12:00:00");
-    return `${d.getDate()} ${d.toLocaleString("en-GB", { month: "short" })} ${d.getFullYear()}`;
-  };
+  const fmt = (ds: string) => formatDate(new Date(ds + "T12:00:00"));
   return `${fmt(days[0]!)} – ${fmt(days[6]!)}`;
 }
 

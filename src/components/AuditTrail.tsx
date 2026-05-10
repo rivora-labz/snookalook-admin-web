@@ -5,20 +5,13 @@ import {
   humanizeAuditAction,
   summarizeMetadata,
 } from "../lib/audit-action-labels";
+import { formatDateTime } from "../lib/datetime";
 
 export type AuditState =
   | { kind: "loading" }
   | { kind: "todo"; reason: string }
   | { kind: "error"; message: string; onRetry: () => void }
   | { kind: "ready"; entries: AdminAuditEntry[] };
-
-function formatDateTime(iso: string): string {
-  const d = new Date(iso);
-  const day = d.getDate();
-  const month = d.toLocaleString("en-GB", { month: "short" });
-  const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-  return `${day} ${month} ${d.getFullYear()} ${time}`;
-}
 
 interface AuditTrailProps {
   state: AuditState;

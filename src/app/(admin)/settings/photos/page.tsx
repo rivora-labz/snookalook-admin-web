@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
+import Image from "next/image";
 import type { CenterPhoto } from "@rivora-labz/snook-shared";
 import {
   DndContext,
@@ -91,10 +92,13 @@ function SortablePhotoCard({
         </div>
       ) : (
         <>
-          <img
+          <Image
             src={photo.url}
             alt={photo.caption ?? `Photo ${photo.displayOrder + 1}`}
-            className="h-full w-full object-cover"
+            fill
+            sizes="(max-width: 768px) 100vw, 33vw"
+            unoptimized
+            className="object-cover"
             draggable={false}
           />
 

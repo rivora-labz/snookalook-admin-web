@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 import { apiFetch, ApiError, formatAED } from "../../../lib/api";
+import { formatDateShort, formatTime } from "../../../lib/datetime";
 import { STATUS_TOKEN, STATUS_TOKEN_TEXT } from "../../../lib/status-tokens";
 import { useStaffSession } from "../../../lib/use-staff-session";
 import ResolveDisputeModal, { type DisputeRecord } from "../../../components/ResolveDisputeModal";
@@ -73,9 +74,7 @@ function shortId(id: string): string {
 }
 
 function formatDateTime(iso: string): string {
-  const d = new Date(iso);
-  return `${d.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} ${d
-    .toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+  return `${formatDateShort(iso)} ${formatTime(iso)}`;
 }
 
 export default function DisputesClient() {

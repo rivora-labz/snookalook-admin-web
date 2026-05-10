@@ -13,6 +13,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { useTheme } from "../lib/ThemeContext";
+import { formatDateShort } from "../lib/datetime";
 
 export interface RetentionWeekPoint {
   weekStart: string; // ISO date
@@ -138,9 +139,7 @@ export default function PlayerRetentionDonut({
                   tick={{ fill: tickFill, fontSize: 10 }}
                   axisLine={{ stroke: gridStroke }}
                   tickLine={false}
-                  tickFormatter={(v: string) =>
-                    new Date(v).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })
-                  }
+                  tickFormatter={(v: string) => formatDateShort(v)}
                 />
                 <YAxis
                   tickFormatter={(v: number) => `${v.toFixed(0)}%`}

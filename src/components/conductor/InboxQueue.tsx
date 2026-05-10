@@ -1,5 +1,7 @@
 "use client";
 
+import { formatTime } from "../../lib/datetime";
+
 export interface InboxItem {
   agent: string;
   sizeBytes: number;
@@ -40,10 +42,7 @@ export default function InboxQueue({
           )}
           <span className="flex-1" />
           <span className="text-[10px] text-th-text-tertiary">
-            {new Date(i.mtime).toLocaleString("en-GB", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
+            {formatTime(i.mtime)}
           </span>
           <button
             onClick={() => onDelete(i.agent)}

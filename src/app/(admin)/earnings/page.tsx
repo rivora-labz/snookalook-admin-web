@@ -1,15 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import {
-  AreaChart,
-  Area,
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
-  ResponsiveContainer,
-} from "recharts";
+import dynamic from "next/dynamic";
+import Image from "next/image";
 import {
   FunnelSimple,
   DownloadSimple,
@@ -28,8 +21,22 @@ import {
   FilePdf,
 } from "phosphor-react";
 import { toast } from "sonner";
-import { apiFetch, apiFetchBlob } from "../../../lib/api";
+import { apiFetch, apiFetchBlob, formatAED } from "../../../lib/api";
+import { formatDate, formatTime } from "../../../lib/datetime";
 import Drawer from "../../../components/Drawer";
+
+const SparklineArea = dynamic(() => import("../../../components/charts/SparklineArea"), {
+  ssr: false,
+  loading: () => <div className="w-full h-full" />,
+});
+const SparklineBar = dynamic(() => import("../../../components/charts/SparklineBar"), {
+  ssr: false,
+  loading: () => <div className="w-full h-full" />,
+});
+const SparklineLine = dynamic(() => import("../../../components/charts/SparklineLine"), {
+  ssr: false,
+  loading: () => <div className="w-full h-full" />,
+});
 
 // Static sparkline arrays — replace with API time-series in a later task
 const SPARK_1 = [40, 55, 35, 70, 60, 80, 90, 75, 85, 95];
@@ -136,12 +143,10 @@ function toTxnStatus(s: string): TxnStatus {
 }
 
 function toTransaction(p: PaymentItem): Transaction {
-  const d = new Date(p.createdAt);
-  const amtAED = p.amount / 100;
   return {
     id: p.id,
-    date: d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
-    time: d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+    date: formatDate(p.createdAt),
+    time: formatTime(p.createdAt),
     player: {
       id: p.booking.host.id,
       name: p.booking.host.displayName,
@@ -150,7 +155,7 @@ function toTransaction(p: PaymentItem): Transaction {
     },
     type: "Booking",
     method: p.method.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-    amount: amtAED < 0 ? `−AED ${Math.abs(amtAED).toLocaleString()}` : `AED ${amtAED.toLocaleString()}`,
+    amount: p.amount < 0 ? `−${formatAED(Math.abs(p.amount))}` : formatAED(p.amount),
     status: toTxnStatus(p.status),
     bookingRef: p.booking.id.slice(0, 8).toUpperCase(),
   };
@@ -236,31 +241,18 @@ export default function EarningsPage() {
     {
       label: "Total Revenue",
       value: kpis
-        ? `AED ${Math.round(kpis.revenueMonth / 100).toLocaleString()}`
+        ? formatAED(kpis.revenueMonth)
         : "AED 48,720",
       delta: "+12.4%",
       positive: true,
       chart: (
-        <AreaChart
+        <SparklineArea
           data={SPARK_1.map((v, i) => ({ i, v }))}
-          margin={{ top: 0, bottom: 0, left: 0, right: 0 }}
-        >
-          <defs>
-            <linearGradient id="colorGreen" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#2ECC71" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#2ECC71" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <Area
-            type="monotone"
-            dataKey="v"
-            stroke="#2ECC71"
-            fill="url(#colorGreen)"
-            strokeWidth={1.5}
-            dot={false}
-            isAnimationActive={false}
-          />
-        </AreaChart>
+          dataKey="v"
+          stroke="#2ECC71"
+          fillId="colorGreen"
+          height={40}
+        />
       ),
     },
     {
@@ -268,37 +260,14 @@ export default function EarningsPage() {
       value: "312",
       delta: "+8.2%",
       positive: true,
-      chart: (
-        <BarChart
-          data={SPARK_2.map((v, i) => ({ i, v }))}
-          margin={{ top: 0, bottom: 0, left: 0, right: 0 }}
-        >
-          <Bar dataKey="v" fill="#3498DB" radius={[2, 2, 0, 0]} isAnimationActive={false} />
-        </BarChart>
-      ),
+      chart: <SparklineBar data={SPARK_2.map((v, i) => ({ i, v }))} fill="#3498DB" height={40} />,
     },
     {
       label: "Avg Booking Value",
-      value: kpis
-        ? `AED ${Math.round(kpis.avgBookingValue / 100).toLocaleString()}`
-        : "AED 156",
+      value: kpis ? formatAED(kpis.avgBookingValue) : "AED 156",
       delta: "+3.1%",
       positive: true,
-      chart: (
-        <LineChart
-          data={SPARK_3.map((v, i) => ({ i, v }))}
-          margin={{ top: 0, bottom: 0, left: 0, right: 0 }}
-        >
-          <Line
-            type="monotone"
-            dataKey="v"
-            stroke="#D4AF37"
-            dot={false}
-            strokeWidth={1.5}
-            isAnimationActive={false}
-          />
-        </LineChart>
-      ),
+      chart: <SparklineLine data={SPARK_3.map((v, i) => ({ i, v }))} stroke="#D4AF37" height={40} />,
     },
     {
       label: "Refund Rate",
@@ -306,26 +275,13 @@ export default function EarningsPage() {
       delta: "-0.3%",
       positive: false,
       chart: (
-        <AreaChart
+        <SparklineArea
           data={SPARK_4.map((v, i) => ({ i, v }))}
-          margin={{ top: 0, bottom: 0, left: 0, right: 0 }}
-        >
-          <defs>
-            <linearGradient id="colorRed" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#E74C3C" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#E74C3C" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <Area
-            type="monotone"
-            dataKey="v"
-            stroke="#E74C3C"
-            fill="url(#colorRed)"
-            strokeWidth={1.5}
-            dot={false}
-            isAnimationActive={false}
-          />
-        </AreaChart>
+          dataKey="v"
+          stroke="#E74C3C"
+          fillId="colorRed"
+          height={40}
+        />
       ),
     },
   ];
@@ -392,11 +348,7 @@ export default function EarningsPage() {
                 )}
                 {card.delta}
               </div>
-              <div className="h-[40px] -mx-1">
-                <ResponsiveContainer width="100%" height={40}>
-                  {card.chart}
-                </ResponsiveContainer>
-              </div>
+              <div className="h-[40px] -mx-1">{card.chart}</div>
             </div>
           ))}
         </div>
@@ -489,12 +441,15 @@ export default function EarningsPage() {
                       <div className="font-inter text-[12px] text-th-text-tertiary">{txn.time}</div>
                     </div>
                     <div className="flex-1 flex items-center gap-2 min-w-0">
-                      <img
+                      <Image
                         src={
                           txn.player.avatarUrl ??
                           `https://i.pravatar.cc/28?u=${txn.player.id}`
                         }
                         alt=""
+                        width={28}
+                        height={28}
+                        unoptimized
                         className="w-7 h-7 rounded-full shrink-0"
                         onError={(e) => {
                           (e.target as HTMLImageElement).style.display = "none";

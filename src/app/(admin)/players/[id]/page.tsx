@@ -11,7 +11,8 @@ import type {
   AdminPlayerMatchItem,
   AdminPlayerMatchResult,
 } from "@rivora-labz/snook-shared";
-import { apiFetch, formatDate, formatAED, ApiError } from "../../../../lib/api";
+import { apiFetch, formatAED, ApiError } from "../../../../lib/api";
+import { formatDate, formatTime, formatDateTime } from "../../../../lib/datetime";
 import { useStaffSession } from "../../../../lib/use-staff-session";
 
 type ChallengeDirection = "sent" | "received";
@@ -176,14 +177,6 @@ function RiskBadge({ label, alert, tooltip }: { label: string; alert: boolean; t
       {alert ? "⚠ " : ""}{label}
     </span>
   );
-}
-
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-}
-
-function formatDateTime(iso: string): string {
-  return `${formatDate(iso)} ${formatTime(iso)}`;
 }
 
 function formatDuration(ms: number | null): string {

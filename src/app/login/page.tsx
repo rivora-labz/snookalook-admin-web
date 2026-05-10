@@ -3,10 +3,13 @@
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "../../lib/supabase/client";
+import { API_BASE } from "../../lib/api-base";
+import { getRuntimeAuthMode, writeAdminAccessTokenCookie } from "../../lib/runtime-auth";
 
 type Step = "phone" | "otp";
 
 const PHONE_PREFIX = "+971";
+const AUTH_MODE = getRuntimeAuthMode();
 
 function LoginForm() {
   const searchParams = useSearchParams();
@@ -28,9 +31,21 @@ function LoginForm() {
     setSubmitting(true);
     setError(null);
     try {
-      const supabase = createClient();
-      const { error: sbError } = await supabase.auth.signInWithOtp({ phone: fullPhone });
-      if (sbError) throw sbError;
+      if (AUTH_MODE === "supabase") {
+        const supabase = createClient();
+        const { error: sbError } = await supabase.auth.signInWithOtp({ phone: fullPhone });
+        if (sbError) throw sbError;
+      } else {
+        const res = await fetch(`${API_BASE}/auth/send-otp`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone: fullPhone }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => null);
+          throw new Error(body?.message ?? "Failed to send code.");
+        }
+      }
       setStep("otp");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send code.");
@@ -40,20 +55,33 @@ function LoginForm() {
   };
 
   const verifyOtp = async () => {
-    if (!/^\d{6}$/.test(otp)) {
-      setError("Enter the 6-digit code.");
+    if (!/^\d{4,6}$/.test(otp)) {
+      setError("Enter the 4- to 6-digit code.");
       return;
     }
     setSubmitting(true);
     setError(null);
     try {
-      const supabase = createClient();
-      const { error: sbError } = await supabase.auth.verifyOtp({
-        phone: fullPhone,
-        token: otp,
-        type: "sms",
-      });
-      if (sbError) throw sbError;
+      if (AUTH_MODE === "supabase") {
+        const supabase = createClient();
+        const { error: sbError } = await supabase.auth.verifyOtp({
+          phone: fullPhone,
+          token: otp,
+          type: "sms",
+        });
+        if (sbError) throw sbError;
+      } else {
+        const res = await fetch(`${API_BASE}/auth/verify-otp`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone: fullPhone, otp }),
+        });
+        const body = await res.json().catch(() => null);
+        if (!res.ok || !body?.accessToken) {
+          throw new Error(body?.message ?? "Incorrect or expired code.");
+        }
+        writeAdminAccessTokenCookie(body.accessToken);
+      }
       window.location.href = next;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Incorrect or expired code.");
@@ -99,7 +127,7 @@ function LoginForm() {
       {step === "otp" && (
         <div>
           <p className="mb-4 text-xs text-th-text-secondary">
-            Enter the 6-digit code sent to{" "}
+            Enter the code sent to{" "}
             <span className="text-th-text">{fullPhone}</span>
           </p>
           <input
@@ -108,12 +136,12 @@ function LoginForm() {
             maxLength={6}
             value={otp}
             onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            placeholder="123456"
+            placeholder="1234"
             className="w-full rounded-input border border-th-divider bg-th-bg px-3 py-2 text-center font-mono text-lg tracking-widest text-th-text outline-none focus:border-th-gold"
           />
           <button
             onClick={verifyOtp}
-            disabled={submitting || otp.length !== 6}
+            disabled={submitting || otp.length < 4}
             className="mt-5 w-full rounded-button bg-th-gold px-4 py-2.5 text-sm font-medium text-black hover:bg-th-gold-hover disabled:opacity-50"
           >
             {submitting ? "Verifying..." : "Verify"}
@@ -131,6 +159,12 @@ function LoginForm() {
       {error && (
         <div className="mt-4 rounded-button border border-[#E74C3C]/40 bg-[#E74C3C]/10 px-3 py-2 text-xs text-[#E74C3C]">
           {error}
+        </div>
+      )}
+
+      {AUTH_MODE === "backend" && (
+        <div className="mt-4 text-center text-xs text-th-text-tertiary">
+          Backend OTP mode is active for this deploy. Use the seeded test code.
         </div>
       )}
     </div>

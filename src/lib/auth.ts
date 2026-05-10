@@ -1,19 +1,28 @@
 import { createClient } from "./supabase/server";
 import { API_BASE } from "./api-base";
+import { ADMIN_ACCESS_TOKEN_COOKIE, getRuntimeAuthMode } from "./runtime-auth";
+import { cookies } from "next/headers";
 
-const AUTH_MODE = process.env.NEXT_PUBLIC_AUTH_MODE ?? "dev";
+const AUTH_MODE = getRuntimeAuthMode();
 const DEV_USER_ID = process.env.NEXT_PUBLIC_DEV_USER_ID ?? "";
+
+export type StaffRole = "OWNER" | "MANAGER" | "STAFF" | "FOUNDER";
 
 export interface StaffContext {
   staffMemberId: string;
-  centerId: string;
-  role: "OWNER" | "MANAGER" | "STAFF";
+  centerId: string | null;
+  centerName?: string;
+  role: StaffRole;
   user: {
     id: string;
     displayName: string;
     email: string | null;
     phone: string;
   };
+}
+
+export function isFounder(ctx: StaffContext | null | undefined): boolean {
+  return ctx?.role === "FOUNDER";
 }
 
 export interface ServerSession {
@@ -33,6 +42,22 @@ const DEV_STAFF: StaffContext = {
 
 export async function getServerSession(): Promise<ServerSession | null> {
   if (AUTH_MODE !== "supabase") {
+    if (AUTH_MODE === "backend") {
+      const accessToken = cookies().get(ADMIN_ACCESS_TOKEN_COOKIE)?.value;
+      if (!accessToken) return null;
+
+      const staff = await getStaffContext(accessToken, false);
+      if (!staff) return null;
+
+      return {
+        userId: staff.user.id,
+        accessToken,
+        email: staff.user.email,
+        phone: staff.user.phone,
+        staff,
+      };
+    }
+
     if (!DEV_USER_ID) {
       return { userId: "dev-user", accessToken: "", email: null, phone: null, staff: DEV_STAFF };
     }
@@ -80,7 +105,8 @@ export async function getStaffContext(token: string, isDevUser = false): Promise
     if (!sm) return null;
     return {
       staffMemberId: sm.id,
-      centerId: sm.centerId,
+      centerId: sm.centerId ?? null,
+      centerName: sm.centerName,
       role: sm.role,
       user: sm.user,
     };

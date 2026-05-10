@@ -1,3 +1,5 @@
+import { formatAED } from "./currency";
+
 export const AUDIT_ACTION_LABELS: Record<string, string> = {
   BOOKING_FORCE_CANCEL: "Force-cancelled booking",
   BOOKING_NO_SHOW: "Marked as no-show",
@@ -27,7 +29,7 @@ export function summarizeMetadata(meta: Record<string, unknown> | null): string 
   if (typeof meta.reason === "string") parts.push(`reason: ${meta.reason}`);
   if (typeof meta.note === "string") parts.push(`note: ${meta.note}`);
   if (typeof meta.refundAmountFils === "number") {
-    parts.push(`refund: AED ${(meta.refundAmountFils / 100).toFixed(2)}`);
+    parts.push(`refund: ${formatAED(meta.refundAmountFils)}`);
   }
   if (typeof meta.participantId === "string") parts.push(`participant: ${meta.participantId.slice(0, 8)}`);
   if (typeof meta.policy === "string") parts.push(`policy: ${meta.policy}`);

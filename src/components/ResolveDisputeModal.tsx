@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { apiFetch, ApiError, formatAED } from "../lib/api";
+import { formatDateTime } from "../lib/datetime";
 
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -212,7 +213,7 @@ export default function ResolveDisputeModal({ open, dispute, onClose, onResolved
             </div>
             <div>
               <div className="text-th-text-tertiary">Reported at</div>
-              <div className="text-th-text">{new Date(dispute.openedAt).toLocaleString("en-GB")}</div>
+              <div className="text-th-text">{formatDateTime(dispute.openedAt)}</div>
             </div>
           </div>
         </section>

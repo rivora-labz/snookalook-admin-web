@@ -4,13 +4,24 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "./api";
 
 export type StaffRole = "OWNER" | "MANAGER" | "STAFF";
-export type StaffSession = { role: StaffRole; userId: string; centerId: string };
+export type StaffSession = {
+  role: StaffRole;
+  userId: string;
+  userDisplayName: string;
+  centerId: string;
+  centerName: string;
+};
 
 let cache: StaffSession | null = null;
 let inflight: Promise<StaffSession> | null = null;
 
 interface StaffMeResponse {
-  staffMember: { role: StaffRole; centerId: string; user: { id: string } };
+  staffMember: {
+    role: StaffRole;
+    centerId: string;
+    centerName: string;
+    user: { id: string; displayName: string };
+  };
 }
 
 function fetchStaffSession(): Promise<StaffSession> {
@@ -19,7 +30,9 @@ function fetchStaffSession(): Promise<StaffSession> {
       cache = {
         role: r.staffMember.role,
         userId: r.staffMember.user.id,
+        userDisplayName: r.staffMember.user.displayName,
         centerId: r.staffMember.centerId,
+        centerName: r.staffMember.centerName,
       };
       return cache;
     });

@@ -1,8 +1,14 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useTheme } from "../lib/ThemeContext";
-import { AreaChart, Area, ResponsiveContainer } from "recharts";
-import { ArrowUpRight, SquaresFour, Calendar, Users, ChartLineUp } from "phosphor-react";
+import { ArrowUpRight, SquaresFour, Calendar, Users, ChartLineUp, ArrowsClockwise } from "phosphor-react";
+import { Skeleton } from "./Skeleton";
+
+const SparklineArea = dynamic(() => import("./charts/SparklineArea"), {
+  ssr: false,
+  loading: () => <div className="w-full h-full" />,
+});
 
 interface KpiData {
   title: string;
@@ -19,8 +25,64 @@ const mockSparkline = [
   { val: 10 }, { val: 25 }, { val: 15 }, { val: 35 }, { val: 30 }, { val: 50 }, { val: 40 }
 ];
 
-export default function DashboardKpiRow({ kpis, loading }: { kpis: any; loading: boolean }) {
+export default function DashboardKpiRow({
+  kpis,
+  loading,
+  error,
+  onRetry,
+}: {
+  kpis: any;
+  loading: boolean;
+  error?: boolean;
+  onRetry?: () => void;
+}) {
   const { isDark } = useTheme();
+
+  if (error && !loading) {
+    return (
+      <div
+        role="alert"
+        className="rounded-2xl border border-[#E74C3C]/40 bg-th-card p-6 flex items-center justify-between"
+      >
+        <div>
+          <h3 className="font-display text-[14px] font-semibold text-[#E74C3C] mb-1">
+            Failed to load KPIs
+          </h3>
+          <p className="font-inter text-[12px] text-th-text-tertiary">
+            Backend unreachable. Tap retry or wait for the next 30s refresh.
+          </p>
+        </div>
+        {onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            aria-label="Retry loading KPIs"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[#D4AF37] hover:bg-[#F7D774] text-black font-display text-[13px] font-semibold px-4 py-2 transition-colors"
+          >
+            <ArrowsClockwise size={14} weight="bold" />
+            Retry
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (loading && !kpis) {
+    return (
+      <div className="grid grid-cols-4 gap-4" aria-busy="true" aria-label="Loading KPIs">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="bg-th-card rounded-2xl p-6 border border-th-divider"
+          >
+            <Skeleton className="h-3 w-24 mb-3" />
+            <Skeleton className="h-7 w-32 mb-3" />
+            <Skeleton className="h-3 w-28" />
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   const data: KpiData[] = [
     { 
@@ -70,7 +132,7 @@ export default function DashboardKpiRow({ kpis, loading }: { kpis: any; loading:
       {data.map((kpi, i) => (
         <div key={kpi.title} className="bg-th-card rounded-2xl p-6 border border-th-divider hover:border-th-border-medium transition-all relative overflow-hidden group">
           <span className="font-inter text-[11px] uppercase tracking-wider text-th-text-tertiary font-bold block mb-2">{kpi.title}</span>
-          <div className="font-display text-[28px] font-bold text-th-text leading-none mb-3">{loading ? "..." : kpi.value}</div>
+          <div className="font-display text-[28px] font-bold text-th-text leading-none mb-3">{kpi.value}</div>
           
           <div className={`font-inter text-[12px] font-medium flex items-center gap-1 ${kpi.trendColor}`}>
             {kpi.trend}
@@ -79,11 +141,7 @@ export default function DashboardKpiRow({ kpis, loading }: { kpis: any; loading:
           {/* Sparkline Decorator */}
           {kpi.showSparkline && (
             <div className="absolute bottom-2 right-2 w-[80px] h-[40px] opacity-70 group-hover:opacity-100 transition-opacity">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={mockSparkline}>
-                  <Area type="monotone" dataKey="val" stroke="#D4AF37" fill="url(#goldGradient)" strokeWidth={2} isAnimationActive={false} />
-                </AreaChart>
-              </ResponsiveContainer>
+              <SparklineArea data={mockSparkline} />
             </div>
           )}
 

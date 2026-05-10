@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import type { StaffRole } from "@rivora-labz/snook-shared";
+import { toast } from "sonner";
 import { apiFetch, formatDate } from "../../../lib/api";
 
 interface StaffItem {
@@ -54,8 +55,14 @@ export default function TeamPage() {
     fetchTeam();
   }, [fetchTeam]);
 
+  const [formError, setFormError] = useState<string | null>(null);
+
   const handleAdd = async () => {
-    if (!formUserId.trim()) return;
+    setFormError(null);
+    if (!formUserId.trim()) {
+      setFormError("User ID is required");
+      return;
+    }
     setSubmitting(true);
     try {
       await apiFetch("/admin/team", {
@@ -65,9 +72,12 @@ export default function TeamPage() {
       setShowModal(false);
       setFormUserId("");
       setFormRole("STAFF");
+      toast.success("Staff added");
       await fetchTeam();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to add staff");
+      const msg = err instanceof Error ? err.message : "Failed to add staff";
+      setFormError(msg);
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }
@@ -77,9 +87,10 @@ export default function TeamPage() {
     if (!confirm(`Remove ${name} from the team?`)) return;
     try {
       await apiFetch(`/admin/team/${id}`, { method: "DELETE" });
+      toast.success(`${name} removed`);
       await fetchTeam();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to remove staff");
+      toast.error(err instanceof Error ? err.message : "Failed to remove staff");
     }
   };
 
@@ -167,14 +178,30 @@ export default function TeamPage() {
           <div className="w-full max-w-md rounded-card border border-th-divider bg-th-card p-6">
             <h3 className="mb-4 font-display text-lg text-th-text">Add Staff Member</h3>
 
-            <label className="mb-1 block text-xs text-th-text-secondary">User ID</label>
+            <label htmlFor="add-staff-userid" className="mb-1 block text-xs text-th-text-secondary">
+              User ID
+            </label>
             <input
+              id="add-staff-userid"
               type="text"
               value={formUserId}
-              onChange={(e) => setFormUserId(e.target.value)}
+              onChange={(e) => {
+                setFormUserId(e.target.value);
+                if (formError) setFormError(null);
+              }}
               placeholder="UUID of existing user"
-              className="mb-4 w-full rounded-input border border-th-divider bg-th-bg px-3 py-2 text-sm text-th-text placeholder-th-text-tertiary outline-none focus:border-th-gold"
+              aria-invalid={formError ? "true" : "false"}
+              aria-describedby={formError ? "add-staff-error" : undefined}
+              className={`mb-1 w-full rounded-input border bg-th-bg px-3 py-2 text-sm text-th-text placeholder-th-text-tertiary outline-none focus:border-th-gold ${
+                formError ? "border-[#E74C3C]" : "border-th-divider"
+              }`}
             />
+            {formError && (
+              <p id="add-staff-error" role="alert" className="mb-3 text-xs text-[#E74C3C]">
+                {formError}
+              </p>
+            )}
+            {!formError && <div className="mb-3" />}
 
             <label className="mb-1 block text-xs text-th-text-secondary">Role</label>
             <select

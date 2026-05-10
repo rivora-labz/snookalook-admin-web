@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 import { apiFetch } from "../lib/api";
+import { formatTime } from "../lib/datetime";
 
 interface ScheduleSlot {
   time: string;
@@ -24,7 +25,7 @@ export default function SchedulePanel() {
         // For now, we'll fetch today's bookings and format them
         const res = await apiFetch<{ items: any[] }>("/admin/bookings?from=today&to=today");
         const formatted = res.items.slice(0, 8).map(b => ({
-          time: new Date(b.startAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+          time: formatTime(b.startAt),
           name: b.host.displayName,
           table: `Table ${b.table?.tableNumber || "--"}`,
           status: b.state === "CONFIRMED" ? "CONFIRMED" : "PENDING",
@@ -77,10 +78,13 @@ export default function SchedulePanel() {
                 
                 <div className="flex-1 flex items-center gap-3 px-3 border-l border-th-divider ml-1">
                   <div className="w-[28px] h-[28px] rounded-full bg-th-divider flex-shrink-0 overflow-hidden ring-1 ring-th-border-medium">
-                    <img 
-                      src={slot.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(slot.name)}&background=random`} 
-                      alt="" 
-                      className="w-full h-full object-cover" 
+                    {/* TODO: self-host avatars via Supabase storage; allowlist policy pending */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={slot.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(slot.name)}&background=random`}
+                      alt=""
+                      loading="lazy"
+                      className="w-full h-full object-cover"
                     />
                   </div>
                   <div className="flex flex-col min-w-0">

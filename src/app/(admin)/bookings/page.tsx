@@ -1,12 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Calendar, Clock, EnvelopeSimple } from "phosphor-react";
 import BookingsCalendarView, {
   type CalBookingItem,
 } from "../../../components/BookingsCalendarView";
 import { useActiveCenterId } from "../../../lib/active-center";
 import { useAdmin } from "../../../lib/AdminContext";
+import { apiFetch, formatAED } from "../../../lib/api";
+import { formatDateShort, formatTime } from "../../../lib/datetime";
+
+interface BookingKpis {
+  revenueToday: number;
+  bookingsCount?: number;
+}
 
 const STATUS_BADGE: Record<
   string,
@@ -57,18 +64,8 @@ const STATUS_BADGE: Record<
 };
 
 function formatTimeRange(startAt: string, endAt: string): string {
-  const fmt = (iso: string) =>
-    new Date(iso).toLocaleTimeString("en-GB", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  const startDate = new Date(startAt);
-  const dateLabel = startDate.toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
-  return `${dateLabel}, ${fmt(startAt)} – ${fmt(endAt)}`;
+  const dateLabel = formatDateShort(startAt, { weekday: "short" });
+  return `${dateLabel}, ${formatTime(startAt)} – ${formatTime(endAt)}`;
 }
 
 export default function BookingsPage() {
@@ -76,6 +73,29 @@ export default function BookingsPage() {
   const { setIsBookingOpen } = useAdmin();
   const [selected, setSelected] = useState<CalBookingItem | null>(null);
   const [isCancelOpen, setIsCancelOpen] = useState(false);
+
+  const [bookingKpis, setBookingKpis] = useState<BookingKpis | null>(null);
+  const [kpiLoading, setKpiLoading] = useState(true);
+  const [kpiError, setKpiError] = useState(false);
+
+  const fetchBookingKpis = useCallback(async () => {
+    try {
+      const data = await apiFetch<{ kpis: BookingKpis }>("/admin/analytics?period=1d");
+      setBookingKpis(data.kpis);
+      setKpiError(false);
+    } catch {
+      setKpiError(true);
+    } finally {
+      setKpiLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchBookingKpis(); }, [fetchBookingKpis]);
+
+  const retryBookingKpis = useCallback(() => {
+    setKpiLoading(true);
+    fetchBookingKpis();
+  }, [fetchBookingKpis]);
 
   const badge = selected ? (STATUS_BADGE[selected.state] ?? STATUS_BADGE.PENDING) : null;
 
@@ -111,6 +131,24 @@ export default function BookingsPage() {
 
       {/* KPI Strip */}
       <div className="px-8 mb-6">
+        {kpiError && !kpiLoading && (
+          <div
+            role="alert"
+            className="mb-3 flex items-center justify-between rounded-xl border border-[#E74C3C]/40 bg-th-card px-4 py-3"
+          >
+            <span className="font-inter text-[13px] text-[#E74C3C]">
+              Could not load booking stats.
+            </span>
+            <button
+              type="button"
+              onClick={retryBookingKpis}
+              aria-label="Retry loading booking stats"
+              className="rounded-lg bg-[#D4AF37] px-3 py-1.5 text-[12px] font-semibold text-black hover:bg-[#F7D774] transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        )}
         <div className="h-[80px] bg-th-card rounded-xl border border-th-divider flex items-center divide-x divide-th-border">
           <div className="flex-1 flex flex-col justify-center px-6">
             <span className="font-inter text-[11px] uppercase tracking-wider text-th-text-tertiary font-medium mb-1">
@@ -118,9 +156,8 @@ export default function BookingsPage() {
             </span>
             <div className="flex items-baseline gap-2">
               <span className="font-display text-[20px] font-bold text-th-text leading-none">
-                24
+                {kpiLoading ? "..." : kpiError ? "--" : (bookingKpis?.bookingsCount ?? "--")}
               </span>
-              <span className="font-inter text-[12px] text-[#2ECC71]">▲ 4%</span>
             </div>
           </div>
           <div className="flex-1 flex flex-col justify-center px-6">
@@ -129,9 +166,8 @@ export default function BookingsPage() {
             </span>
             <div className="flex items-baseline gap-2">
               <span className="font-display text-[20px] font-bold text-th-text leading-none">
-                AED 4,280
+                {kpiLoading ? "..." : kpiError ? "--" : formatAED(bookingKpis?.revenueToday ?? 0)}
               </span>
-              <span className="font-inter text-[12px] text-[#2ECC71]">▲ 12%</span>
             </div>
           </div>
           <div className="flex-1 flex flex-col justify-center px-6">
@@ -140,7 +176,7 @@ export default function BookingsPage() {
             </span>
             <div className="flex items-baseline gap-2">
               <span className="font-display text-[20px] font-bold text-th-text leading-none">
-                3.2%
+                {kpiLoading ? "..." : "--"}
               </span>
               <span className="font-inter text-[12px] text-th-text-tertiary">—</span>
             </div>
@@ -166,9 +202,12 @@ export default function BookingsPage() {
               <div className="flex justify-between items-start mb-6">
                 <div className="flex items-center gap-3">
                   <div className="w-[48px] h-[48px] rounded-full overflow-hidden border border-th-border-medium">
+                    {/* TODO: self-host avatars via Supabase storage; allowlist policy pending */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={`https://i.pravatar.cc/150?u=${selected.id}`}
                       alt={selected.host.displayName}
+                      loading="lazy"
                       className="w-full h-full object-cover"
                     />
                   </div>
@@ -226,7 +265,7 @@ export default function BookingsPage() {
                   </span>
                   <div className="flex flex-col items-end">
                     <span className="font-mono text-[16px] font-semibold text-[#D4AF37]">
-                      AED {((selected.durationMinutes / 60) * 120).toFixed(0)}
+                      {formatAED(Math.round((selected.durationMinutes / 60) * 120 * 100), { decimals: 0 })}
                     </span>
                     <span className="font-inter text-[11px] text-th-text-tertiary">
                       Paid via Tabby
