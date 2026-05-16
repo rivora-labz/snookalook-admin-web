@@ -38,14 +38,6 @@ const SparklineLine = dynamic(() => import("../../../components/charts/Sparkline
   loading: () => <div className="w-full h-full" />,
 });
 
-// Static sparkline arrays — replace with API time-series in a later task
-const SPARK_1 = [40, 55, 35, 70, 60, 80, 90, 75, 85, 95];
-const SPARK_2 = [20, 30, 25, 40, 35, 45, 30, 50, 45, 55];
-const SPARK_3 = [60, 50, 70, 55, 65, 75, 60, 80, 70, 90];
-const SPARK_4 = [5, 3, 4, 2, 3, 4, 3, 2, 3, 2];
-
-// -- Helper components --
-
 type TxnType = "Booking" | "Wallet Top-up" | "Membership" | "Refund";
 type TxnStatus = "Completed" | "Pending" | "Refunded" | "Failed";
 
@@ -100,8 +92,6 @@ function MethodDisplay({ method }: { method: string }) {
   );
 }
 
-// -- Interfaces --
-
 interface Transaction {
   id: string;
   date: string;
@@ -110,15 +100,25 @@ interface Transaction {
   type: TxnType;
   method: string;
   amount: string;
+  amountFils: number;
   status: TxnStatus;
   bookingRef?: string;
 }
 
-interface Kpis {
-  revenueToday: number;
-  revenueWeek: number;
-  revenueMonth: number;
-  avgBookingValue: number;
+interface EarningsKpi {
+  revenueFils: number;
+  transactions: number;
+  avgFils: number;
+  refundRatePct: number;
+  revenueDeltaPct?: number;
+  transactionsDeltaPct?: number;
+  avgDeltaPct?: number;
+  refundRateDeltaPct?: number;
+}
+
+interface SparkPoint {
+  date: string;
+  revenueFils: number;
 }
 
 interface PaymentItem {
@@ -156,6 +156,7 @@ function toTransaction(p: PaymentItem): Transaction {
     type: "Booking",
     method: p.method.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
     amount: p.amount < 0 ? `−${formatAED(Math.abs(p.amount))}` : formatAED(p.amount),
+    amountFils: p.amount,
     status: toTxnStatus(p.status),
     bookingRef: p.booking.id.slice(0, 8).toUpperCase(),
   };
@@ -171,10 +172,20 @@ function groupByDate(txns: Transaction[]): { date: string; items: Transaction[] 
   return Array.from(map.entries()).map(([date, items]) => ({ date, items }));
 }
 
+function formatDelta(pct: number | undefined): { text: string; isUp: boolean } | null {
+  if (pct == null || !Number.isFinite(pct)) return null;
+  const sign = pct >= 0 ? "+" : "";
+  const display = (pct * 100).toFixed(1).replace(/\.0$/, "");
+  return { text: `${sign}${display}%`, isUp: pct >= 0 };
+}
+
 const PAGE_SIZE = 12;
+const COMING_SOON = "Coming soon";
+const COMING_SOON_ACTIONS = "Coming soon — requires Tabby + Stripe webhook hookup";
 
 export default function EarningsPage() {
-  const [kpis, setKpis] = useState<Kpis | null>(null);
+  const [kpi, setKpi] = useState<EarningsKpi | null>(null);
+  const [spark, setSpark] = useState<SparkPoint[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -185,11 +196,13 @@ export default function EarningsPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [analyticsRes, paymentsRes] = await Promise.all([
-        apiFetch<{ kpis: Kpis }>("/admin/analytics?period=30d"),
+      const [kpiRes, sparkRes, paymentsRes] = await Promise.all([
+        apiFetch<EarningsKpi>("/admin/earnings/kpi?period=30d&comparePrev=true"),
+        apiFetch<{ series: SparkPoint[] }>("/admin/earnings/spark?period=30d"),
         apiFetch<{ items: PaymentItem[] }>("/admin/payments?limit=50"),
       ]);
-      setKpis(analyticsRes.kpis);
+      setKpi(kpiRes);
+      setSpark(sparkRes.series);
       setTransactions(paymentsRes.items.map(toTransaction));
     } catch {
       // keep stale data on refresh failures
@@ -232,20 +245,16 @@ export default function EarningsPage() {
   const pagedTxns = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const pagedGroups = groupByDate(pagedTxns);
 
-  const handleAction = (msg: string) => {
-    toast(msg);
-    setSelectedTxn(null);
-  };
+  const sparkSeries = spark.map((p, i) => ({ i, v: Math.round(p.revenueFils / 100) }));
 
   const kpiCards = [
     {
       label: "Total Revenue",
-      value: kpis ? formatAED(kpis.revenueMonth) : formatAED(0),
-      delta: "+12.4%",
-      positive: true,
+      value: kpi ? formatAED(kpi.revenueFils) : formatAED(0),
+      delta: formatDelta(kpi?.revenueDeltaPct),
       chart: (
         <SparklineArea
-          data={SPARK_1.map((v, i) => ({ i, v }))}
+          data={sparkSeries}
           dataKey="v"
           stroke="#2ECC71"
           fillId="colorGreen"
@@ -255,26 +264,23 @@ export default function EarningsPage() {
     },
     {
       label: "Transactions",
-      value: "312",
-      delta: "+8.2%",
-      positive: true,
-      chart: <SparklineBar data={SPARK_2.map((v, i) => ({ i, v }))} fill="#3498DB" height={40} />,
+      value: kpi ? String(kpi.transactions) : "—",
+      delta: formatDelta(kpi?.transactionsDeltaPct),
+      chart: <SparklineBar data={sparkSeries} fill="#3498DB" height={40} />,
     },
     {
       label: "Avg Booking Value",
-      value: kpis ? formatAED(kpis.avgBookingValue) : formatAED(0),
-      delta: "+3.1%",
-      positive: true,
-      chart: <SparklineLine data={SPARK_3.map((v, i) => ({ i, v }))} stroke="#D4AF37" height={40} />,
+      value: kpi ? formatAED(kpi.avgFils) : formatAED(0),
+      delta: formatDelta(kpi?.avgDeltaPct),
+      chart: <SparklineLine data={sparkSeries} stroke="#D4AF37" height={40} />,
     },
     {
       label: "Refund Rate",
-      value: "2.4%",
-      delta: "-0.3%",
-      positive: false,
+      value: kpi ? `${kpi.refundRatePct.toFixed(1).replace(/\.0$/, "")}%` : "—",
+      delta: formatDelta(kpi?.refundRateDeltaPct),
       chart: (
         <SparklineArea
-          data={SPARK_4.map((v, i) => ({ i, v }))}
+          data={sparkSeries}
           dataKey="v"
           stroke="#E74C3C"
           fillId="colorRed"
@@ -297,7 +303,11 @@ export default function EarningsPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <button className="flex h-[36px] items-center gap-2 rounded-lg border border-[var(--th-border)] px-4 font-inter text-[13px] text-th-text hover:bg-th-card transition-colors">
+          <button
+            disabled
+            title={COMING_SOON}
+            className="flex h-[36px] items-center gap-2 rounded-lg border border-[var(--th-border)] px-4 font-inter text-[13px] text-th-text hover:bg-th-card transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
             <FunnelSimple size={16} />
             Filter
           </button>
@@ -316,39 +326,48 @@ export default function EarningsPage() {
       <div className="flex-1 overflow-y-auto pb-10 custom-scrollbar">
         {/* KPI strip */}
         <div className="grid grid-cols-4 gap-4 mb-6">
-          {kpiCards.map((card) => (
-            <div
-              key={card.label}
-              className="bg-th-card rounded-[14px] border border-[var(--th-border)] p-6"
-            >
-              <div className="flex items-center gap-1 mb-2">
-                <span className="font-inter text-[12px] font-medium text-th-text-tertiary uppercase tracking-wide">
-                  {card.label}
-                </span>
-                <Info size={12} className="text-th-text-tertiary" />
-              </div>
-              <div className="font-display text-[28px] font-bold text-th-text leading-none mb-1">
-                {loading ? (
-                  <div className="h-7 w-24 animate-pulse rounded bg-th-divider" />
-                ) : (
-                  card.value
-                )}
-              </div>
+          {kpiCards.map((card) => {
+            const deltaColor = card.delta == null
+              ? "text-th-text-tertiary"
+              : card.delta.isUp
+                ? "text-[#2ECC71]"
+                : "text-[#E74C3C]";
+            return (
               <div
-                className={`flex items-center gap-1 font-inter text-[12px] mb-3 ${
-                  card.positive ? "text-[#2ECC71]" : "text-[#E74C3C]"
-                }`}
+                key={card.label}
+                className="bg-th-card rounded-[14px] border border-[var(--th-border)] p-6"
               >
-                {card.positive ? (
-                  <ArrowUpRight size={12} />
-                ) : (
-                  <ArrowDownRight size={12} />
-                )}
-                {card.delta}
+                <div className="flex items-center gap-1 mb-2">
+                  <span className="font-inter text-[12px] font-medium text-th-text-tertiary uppercase tracking-wide">
+                    {card.label}
+                  </span>
+                  <Info size={12} className="text-th-text-tertiary" />
+                </div>
+                <div className="font-display text-[28px] font-bold text-th-text leading-none mb-1">
+                  {loading ? (
+                    <div className="h-7 w-24 animate-pulse rounded bg-th-divider" />
+                  ) : (
+                    card.value
+                  )}
+                </div>
+                <div className={`flex items-center gap-1 font-inter text-[12px] mb-3 ${deltaColor}`}>
+                  {card.delta == null ? (
+                    <span>—</span>
+                  ) : (
+                    <>
+                      {card.delta.isUp ? (
+                        <ArrowUpRight size={12} />
+                      ) : (
+                        <ArrowDownRight size={12} />
+                      )}
+                      {card.delta.text}
+                    </>
+                  )}
+                </div>
+                <div className="h-[40px] -mx-1">{card.chart}</div>
               </div>
-              <div className="h-[40px] -mx-1">{card.chart}</div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Filter / search row */}
@@ -373,7 +392,9 @@ export default function EarningsPage() {
             {["Last 30 days", "All statuses", "All methods"].map((label) => (
               <button
                 key={label}
-                className="flex h-[36px] items-center gap-1.5 px-4 bg-th-card border border-[var(--th-border)] rounded-full font-inter text-[13px] text-th-text hover:bg-[var(--th-hover)] transition-colors"
+                disabled
+                title={COMING_SOON}
+                className="flex h-[36px] items-center gap-1.5 px-4 bg-th-card border border-[var(--th-border)] rounded-full font-inter text-[13px] text-th-text hover:bg-[var(--th-hover)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {label}
                 <CaretDown size={12} />
@@ -575,7 +596,11 @@ export default function EarningsPage() {
                 </>
               )}
               <span className="font-inter text-[13px] text-th-text-tertiary">Receipt</span>
-              <button className="flex items-center gap-1 text-[#D4AF37] hover:text-[#E8C654] transition-colors font-inter text-[13px]">
+              <button
+                disabled
+                title={COMING_SOON_ACTIONS}
+                className="flex items-center gap-1 text-[#D4AF37] hover:text-[#E8C654] transition-colors font-inter text-[13px] disabled:opacity-40 disabled:cursor-not-allowed"
+              >
                 <FilePdf size={14} />
                 View PDF
               </button>
@@ -586,14 +611,16 @@ export default function EarningsPage() {
               {selectedTxn.status === "Completed" && (
                 <>
                   <button
-                    onClick={() => handleAction("Refund initiated")}
-                    className="flex-1 h-[44px] rounded-lg border border-[#E74C3C]/20 text-[#E74C3C] hover:bg-[#E74C3C]/10 transition-colors font-inter text-[14px]"
+                    disabled
+                    title={COMING_SOON_ACTIONS}
+                    className="flex-1 h-[44px] rounded-lg border border-[#E74C3C]/20 text-[#E74C3C] hover:bg-[#E74C3C]/10 transition-colors font-inter text-[14px] disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     Issue refund
                   </button>
                   <button
-                    onClick={() => handleAction("Receipt opened")}
-                    className="flex-1 h-[44px] rounded-lg bg-[#D4AF37] hover:bg-[#E8C654] text-black transition-colors font-inter text-[14px] font-semibold"
+                    disabled
+                    title={COMING_SOON_ACTIONS}
+                    className="flex-1 h-[44px] rounded-lg bg-[#D4AF37] hover:bg-[#E8C654] text-black transition-colors font-inter text-[14px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     View receipt
                   </button>
@@ -601,8 +628,9 @@ export default function EarningsPage() {
               )}
               {selectedTxn.status === "Refunded" && (
                 <button
-                  onClick={() => handleAction("Receipt opened")}
-                  className="w-full h-[44px] rounded-lg bg-[#D4AF37] hover:bg-[#E8C654] text-black transition-colors font-inter text-[14px] font-semibold"
+                  disabled
+                  title={COMING_SOON_ACTIONS}
+                  className="w-full h-[44px] rounded-lg bg-[#D4AF37] hover:bg-[#E8C654] text-black transition-colors font-inter text-[14px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   View receipt
                 </button>
@@ -610,14 +638,16 @@ export default function EarningsPage() {
               {selectedTxn.status === "Pending" && (
                 <>
                   <button
-                    onClick={() => handleAction("Transaction cancelled")}
-                    className="flex-1 h-[44px] rounded-lg border border-[#E74C3C]/20 text-[#E74C3C] hover:bg-[#E74C3C]/10 transition-colors font-inter text-[14px]"
+                    disabled
+                    title={COMING_SOON_ACTIONS}
+                    className="flex-1 h-[44px] rounded-lg border border-[#E74C3C]/20 text-[#E74C3C] hover:bg-[#E74C3C]/10 transition-colors font-inter text-[14px] disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     Cancel
                   </button>
                   <button
-                    onClick={() => handleAction("Marked as completed")}
-                    className="flex-1 h-[44px] rounded-lg bg-[#2ECC71] hover:bg-[#27AE60] text-black transition-colors font-inter text-[14px] font-semibold"
+                    disabled
+                    title={COMING_SOON_ACTIONS}
+                    className="flex-1 h-[44px] rounded-lg bg-[#2ECC71] hover:bg-[#27AE60] text-black transition-colors font-inter text-[14px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     Mark completed
                   </button>
@@ -625,8 +655,9 @@ export default function EarningsPage() {
               )}
               {selectedTxn.status === "Failed" && (
                 <button
-                  onClick={() => handleAction("Payment retry initiated")}
-                  className="w-full h-[44px] rounded-lg bg-[#D4AF37] hover:bg-[#E8C654] text-black transition-colors font-inter text-[14px] font-semibold"
+                  disabled
+                  title={COMING_SOON_ACTIONS}
+                  className="w-full h-[44px] rounded-lg bg-[#D4AF37] hover:bg-[#E8C654] text-black transition-colors font-inter text-[14px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Retry payment
                 </button>

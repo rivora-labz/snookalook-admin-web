@@ -24,8 +24,11 @@ interface CalBookingItem {
   endAt: string;
   durationMinutes: number;
   state: BookingState;
-  host: { displayName: string };
+  totalAmount: number;
+  notes: string | null;
+  host: { id: string; displayName: string; phone?: string | null };
   table: { id: string; tableNumber: number; type: string } | null;
+  payment: { id: string; amount: number; status: string; method: string } | null;
 }
 
 // ─── Utils ───────────────────────────────────────────────────────────────────
@@ -135,11 +138,12 @@ const STATE_TEXT: Record<string, string> = {
 interface Props {
   activeCenterId: string | null;
   onSelectBooking?: (booking: CalBookingItem) => void;
+  refreshKey?: number;
 }
 
 export { type CalBookingItem };
 
-export default function BookingsCalendarView({ activeCenterId, onSelectBooking }: Props) {
+export default function BookingsCalendarView({ activeCenterId, onSelectBooking, refreshKey = 0 }: Props) {
   const router = useRouter();
   const [weekOffset, setWeekOffset] = useState(0);
   const [bookings, setBookings] = useState<CalBookingItem[]>([]);
@@ -189,7 +193,8 @@ export default function BookingsCalendarView({ activeCenterId, onSelectBooking }
     const controller = new AbortController();
     abortRef.current = controller;
     fetchWeek(start, end, activeCenterId, controller.signal);
-  }, [fetchWeek, start, end, activeCenterId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchWeek, start, end, activeCenterId, refreshKey]);
 
   useEffect(() => {
     kickFetch();

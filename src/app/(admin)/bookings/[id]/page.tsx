@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import type { Route } from "next";
 import type { BookingState } from "@rivora-labz/snook-shared";
 import { apiFetch, formatAED, ApiError } from "../../../../lib/api";
-import { formatDate, formatTime, formatDateTime } from "../../../../lib/datetime";
+import { formatTime, formatDateTime } from "../../../../lib/datetime";
 
 interface BookingDetail {
   id: string;
@@ -40,6 +40,32 @@ interface PaymentItem {
   providerReference: string | null;
   createdAt: string;
   capturedAt: string | null;
+}
+
+interface ChatMessageItem {
+  id: string;
+  senderId: string;
+  senderDisplayName: string;
+  senderAvatarUrl: string | null;
+  body: string;
+  type: string;
+  createdAt: string;
+}
+
+interface AuditLogActor {
+  id: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
+interface AuditLogItem {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  actor: AuditLogActor | null;
 }
 
 const STATE_COLOR: Record<string, string> = {
@@ -119,6 +145,14 @@ function ParticipantChip({
   );
 }
 
+function formatAuditAction(action: string): string {
+  return action
+    .toLowerCase()
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
 export default function BookingDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -133,7 +167,29 @@ export default function BookingDetailPage() {
   const [paymentsError, setPaymentsError] = useState<string | null>(null);
   const [paymentsLoading, setPaymentsLoading] = useState(true);
 
+  const [messages, setMessages] = useState<ChatMessageItem[] | null>(null);
+  const [messagesError, setMessagesError] = useState<string | null>(null);
+  const [messagesLoading, setMessagesLoading] = useState(true);
+
+  const [auditItems, setAuditItems] = useState<AuditLogItem[]>([]);
+  const [auditCursor, setAuditCursor] = useState<string | null>(null);
+  const [auditError, setAuditError] = useState<string | null>(null);
+  const [auditLoading, setAuditLoading] = useState(true);
+  const [auditLoadingMore, setAuditLoadingMore] = useState(false);
+
   const [toast, setToast] = useState<{ msg: string; tone: "ok" | "err" } | null>(null);
+
+  const [isForceOpen, setIsForceOpen] = useState(false);
+  const [forceReason, setForceReason] = useState("");
+  const [forceBusy, setForceBusy] = useState(false);
+  const [forceError, setForceError] = useState<string | null>(null);
+
+  const [isNoShowOpen, setIsNoShowOpen] = useState(false);
+  const [noShowParticipant, setNoShowParticipant] = useState<string>("");
+  const [noShowBusy, setNoShowBusy] = useState(false);
+  const [noShowError, setNoShowError] = useState<string | null>(null);
+
+  const [resendBusy, setResendBusy] = useState(false);
 
   const showToast = useCallback((msg: string, tone: "ok" | "err" = "ok") => {
     setToast({ msg, tone });
@@ -148,8 +204,6 @@ export default function BookingDetailPage() {
       setNotFound(false);
       setError(null);
     } catch (err) {
-      // Fallback: endpoint may not exist yet (404 NOT_FOUND or 404 from missing route).
-      // Try wide-range list and filter client-side.
       if (err instanceof ApiError && (err.status === 404 || err.code === "NOT_FOUND")) {
         try {
           const now = new Date();
@@ -184,9 +238,6 @@ export default function BookingDetailPage() {
     setPaymentsLoading(true);
     setPaymentsError(null);
     try {
-      // No /admin/bookings/:id/payments endpoint yet — pull recent admin payments
-      // for this center and filter client-side. This covers the common case
-      // (recent disputes); old bookings may need backend follow-on.
       const resp = await apiFetch<{ items: Array<PaymentItem & { booking: { id: string } }> }>(
         `/admin/payments?limit=100`,
       );
@@ -202,16 +253,128 @@ export default function BookingDetailPage() {
     }
   }, [bookingId]);
 
+  const fetchMessages = useCallback(async () => {
+    setMessagesLoading(true);
+    setMessagesError(null);
+    try {
+      const resp = await apiFetch<{ items: ChatMessageItem[] }>(
+        `/admin/bookings/${bookingId}/messages?limit=20`,
+      );
+      setMessages(resp.items);
+    } catch (err) {
+      setMessagesError(err instanceof Error ? err.message : "Failed to load messages");
+      setMessages([]);
+    } finally {
+      setMessagesLoading(false);
+    }
+  }, [bookingId]);
+
+  const fetchAuditLog = useCallback(
+    async (cursor: string | null = null, append = false) => {
+      if (append) setAuditLoadingMore(true);
+      else setAuditLoading(true);
+      setAuditError(null);
+      try {
+        const qs = new URLSearchParams({ limit: "20" });
+        if (cursor) qs.set("cursor", cursor);
+        const resp = await apiFetch<{ items: AuditLogItem[]; nextCursor: string | null }>(
+          `/admin/bookings/${bookingId}/audit-log?${qs.toString()}`,
+        );
+        setAuditItems((prev) => (append ? [...prev, ...resp.items] : resp.items));
+        setAuditCursor(resp.nextCursor);
+      } catch (err) {
+        setAuditError(err instanceof Error ? err.message : "Failed to load audit log");
+      } finally {
+        if (append) setAuditLoadingMore(false);
+        else setAuditLoading(false);
+      }
+    },
+    [bookingId],
+  );
+
   useEffect(() => {
     if (bookingId) {
       fetchBooking();
       fetchPayments();
+      fetchMessages();
+      fetchAuditLog(null, false);
     }
-  }, [bookingId, fetchBooking, fetchPayments]);
+  }, [bookingId, fetchBooking, fetchPayments, fetchMessages, fetchAuditLog]);
 
   const totalRefunded = (payments ?? [])
     .filter((p) => p.status === "REFUNDED")
     .reduce((sum, p) => sum + p.amount, 0);
+
+  const openForceCancel = useCallback(() => {
+    setForceReason("");
+    setForceError(null);
+    setIsForceOpen(true);
+  }, []);
+
+  const confirmForceCancel = useCallback(async () => {
+    if (forceReason.trim().length < 3) {
+      setForceError("Please provide a reason (min 3 characters).");
+      return;
+    }
+    setForceBusy(true);
+    setForceError(null);
+    try {
+      await apiFetch(`/admin/bookings/${bookingId}/force-cancel`, {
+        method: "POST",
+        body: JSON.stringify({ reason: forceReason.trim() }),
+      });
+      setIsForceOpen(false);
+      showToast("Booking force-cancelled and refund issued.", "ok");
+      await Promise.all([fetchBooking(), fetchPayments(), fetchAuditLog(null, false)]);
+    } catch (err) {
+      setForceError(err instanceof Error ? err.message : "Force cancel failed");
+    } finally {
+      setForceBusy(false);
+    }
+  }, [bookingId, forceReason, showToast, fetchBooking, fetchPayments, fetchAuditLog]);
+
+  const openNoShow = useCallback(() => {
+    if (!booking) return;
+    setNoShowParticipant(booking.hostUserId);
+    setNoShowError(null);
+    setIsNoShowOpen(true);
+  }, [booking]);
+
+  const confirmNoShow = useCallback(async () => {
+    if (!noShowParticipant) {
+      setNoShowError("Select a participant.");
+      return;
+    }
+    setNoShowBusy(true);
+    setNoShowError(null);
+    try {
+      await apiFetch(`/admin/bookings/${bookingId}/no-show`, {
+        method: "POST",
+        body: JSON.stringify({ participantId: noShowParticipant }),
+      });
+      setIsNoShowOpen(false);
+      showToast("Marked as no-show.", "ok");
+      await Promise.all([fetchBooking(), fetchAuditLog(null, false)]);
+    } catch (err) {
+      setNoShowError(err instanceof Error ? err.message : "No-show failed");
+    } finally {
+      setNoShowBusy(false);
+    }
+  }, [bookingId, noShowParticipant, showToast, fetchBooking, fetchAuditLog]);
+
+  const handleResend = useCallback(async () => {
+    setResendBusy(true);
+    try {
+      await apiFetch<{ sent: boolean }>(`/admin/bookings/${bookingId}/resend-confirmation`, {
+        method: "POST",
+      });
+      showToast("Confirmation re-sent.", "ok");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to re-send", "err");
+    } finally {
+      setResendBusy(false);
+    }
+  }, [bookingId, showToast]);
 
   return (
     <div>
@@ -373,10 +536,6 @@ export default function BookingDetailPage() {
             ) : !payments || payments.length === 0 ? (
               <div className="p-6 text-center text-sm text-th-text-tertiary">
                 No payment records found for this booking.
-                <div className="mt-2 text-[11px] text-th-text-tertiary/80">
-                  (Searched recent 100 payments — old bookings may need direct lookup once
-                  /admin/bookings/:id/payments lands.)
-                </div>
               </div>
             ) : (
               <ul className="divide-y divide-th-divider">
@@ -429,20 +588,63 @@ export default function BookingDetailPage() {
             )}
           </div>
 
-          {/* Chat snippet — TODO: backend endpoint */}
+          {/* Chat snippet */}
           <div className="mb-6 rounded-card border border-th-divider bg-th-card">
             <div className="flex items-center justify-between border-b border-th-divider px-5 py-3">
               <h2 className="font-display text-lg text-th-text">Chat Snippet</h2>
+              <span className="text-xs text-th-text-tertiary">
+                {messages ? `${messages.length} message${messages.length === 1 ? "" : "s"}` : ""}
+              </span>
             </div>
-            <div className="border border-dashed border-[#F39C12]/40 bg-[#F39C12]/5 p-5 text-sm text-th-text-secondary">
-              <div className="font-medium text-[#F39C12]">Backend gap</div>
-              <div className="mt-1">
-                No <code className="font-mono">GET /v1/admin/bookings/:id/messages</code> endpoint
-                exists yet. The user-scoped chat route at <code className="font-mono">/v1/chat</code>{" "}
-                cannot be reused (admin acts as a third party). Backlog: scoped admin
-                read-only endpoint with the last N messages by bookingId.
+            {messagesLoading ? (
+              <div className="space-y-2 p-5">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="h-10 animate-pulse rounded bg-th-divider" />
+                ))}
               </div>
-            </div>
+            ) : messagesError ? (
+              <div className="p-6 text-center text-sm text-[#E74C3C]">
+                {messagesError}
+                <div className="mt-3">
+                  <button
+                    onClick={fetchMessages}
+                    className="rounded-button bg-th-gold px-4 py-1.5 text-xs font-medium text-black hover:bg-th-gold-hover"
+                  >
+                    Retry
+                  </button>
+                </div>
+              </div>
+            ) : !messages || messages.length === 0 ? (
+              <div className="p-6 text-center text-sm text-th-text-tertiary">
+                No messages exchanged for this booking.
+              </div>
+            ) : (
+              <ul className="divide-y divide-th-divider">
+                {messages.map((m) => {
+                  const initial = m.senderDisplayName.charAt(0).toUpperCase();
+                  return (
+                    <li key={m.id} className="flex items-start gap-3 px-5 py-3">
+                      <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-th-gold text-xs font-bold text-black">
+                        {initial}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-sm font-medium text-th-text">
+                            {m.senderDisplayName}
+                          </span>
+                          <span className="text-[11px] text-th-text-tertiary">
+                            {formatDateTime(m.createdAt)}
+                          </span>
+                        </div>
+                        <div className="mt-0.5 break-words text-sm text-th-text-secondary">
+                          {m.body}
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
 
           {/* Actions */}
@@ -450,59 +652,203 @@ export default function BookingDetailPage() {
             <h2 className="mb-4 font-display text-lg text-th-text">Actions</h2>
             <div className="flex flex-wrap gap-3">
               <button
-                onClick={() =>
-                  showToast(
-                    "Force cancel + refund — placeholder. Backend POST /admin/bookings/:id/cancel exists; wire-up pending follow-on brief.",
-                    "ok",
-                  )
-                }
+                onClick={openForceCancel}
                 disabled={booking.state === "CANCELLED"}
                 className="rounded-button bg-[#E74C3C] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
               >
                 Force Cancel + Refund
               </button>
               <button
-                onClick={() =>
-                  showToast(
-                    "Mark no-show — placeholder. Backend brief pending.",
-                    "ok",
-                  )
-                }
-                disabled={booking.state === "CANCELLED" || booking.state === "NO_SHOW"}
+                onClick={openNoShow}
+                disabled={booking.state === "CANCELLED" || booking.state === "NO_SHOW" || booking.state === "COMPLETED"}
                 className="rounded-button border border-th-divider bg-th-bg px-4 py-2 text-sm font-medium text-th-text hover:bg-th-hover disabled:opacity-50"
               >
                 Mark No-Show
               </button>
               <button
-                onClick={() =>
-                  showToast(
-                    "Re-send confirmation — placeholder. Backend brief pending.",
-                    "ok",
-                  )
-                }
-                className="rounded-button border border-th-divider bg-th-bg px-4 py-2 text-sm font-medium text-th-text hover:bg-th-hover"
+                onClick={handleResend}
+                disabled={resendBusy}
+                className="rounded-button border border-th-divider bg-th-bg px-4 py-2 text-sm font-medium text-th-text hover:bg-th-hover disabled:opacity-50"
               >
-                Re-send Confirmation
+                {resendBusy ? "Sending…" : "Re-send Confirmation"}
               </button>
             </div>
           </div>
 
-          {/* Audit trail — TODO: backend AuditLog model */}
+          {/* Audit trail */}
           <div className="mb-6 rounded-card border border-th-divider bg-th-card">
             <div className="border-b border-th-divider px-5 py-3">
               <h2 className="font-display text-lg text-th-text">Audit Trail</h2>
             </div>
-            <div className="border border-dashed border-[#F39C12]/40 bg-[#F39C12]/5 p-5 text-sm text-th-text-secondary">
-              <div className="font-medium text-[#F39C12]">Backend gap</div>
-              <div className="mt-1">
-                <code className="font-mono">AuditLog</code> model not implemented yet (per
-                backlog brief D). Once seeded, this section will list reschedules, status
-                changes, and admin overrides with actor + timestamp.
+            {auditLoading ? (
+              <div className="space-y-2 p-5">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="h-12 animate-pulse rounded bg-th-divider" />
+                ))}
               </div>
-            </div>
+            ) : auditError ? (
+              <div className="p-6 text-center text-sm text-[#E74C3C]">
+                {auditError}
+                <div className="mt-3">
+                  <button
+                    onClick={() => fetchAuditLog(null, false)}
+                    className="rounded-button bg-th-gold px-4 py-1.5 text-xs font-medium text-black hover:bg-th-gold-hover"
+                  >
+                    Retry
+                  </button>
+                </div>
+              </div>
+            ) : auditItems.length === 0 ? (
+              <div className="p-6 text-center text-sm text-th-text-tertiary">
+                No audit entries yet.
+              </div>
+            ) : (
+              <>
+                <ul className="divide-y divide-th-divider">
+                  {auditItems.map((e) => (
+                    <li key={e.id} className="px-5 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium text-th-text">
+                            {formatAuditAction(e.action)}
+                          </div>
+                          <div className="mt-0.5 text-[11px] text-th-text-tertiary">
+                            {e.actor ? e.actor.displayName : "System"} ·{" "}
+                            {formatDateTime(e.createdAt)}
+                          </div>
+                          {e.metadata && Object.keys(e.metadata).length > 0 && (
+                            <pre className="mt-2 max-w-full overflow-x-auto rounded bg-th-bg p-2 text-[11px] text-th-text-secondary">
+                              {JSON.stringify(e.metadata, null, 2)}
+                            </pre>
+                          )}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                {auditCursor && (
+                  <div className="border-t border-th-divider p-3 text-center">
+                    <button
+                      onClick={() => fetchAuditLog(auditCursor, true)}
+                      disabled={auditLoadingMore}
+                      className="rounded-button border border-th-divider bg-th-bg px-4 py-1.5 text-xs font-medium text-th-text hover:bg-th-hover disabled:opacity-50"
+                    >
+                      {auditLoadingMore ? "Loading…" : "Load more"}
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </>
       ) : null}
+
+      {/* Force-cancel modal */}
+      {isForceOpen && booking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--th-overlay)] backdrop-blur-sm">
+          <div className="bg-th-card border border-th-divider rounded-2xl p-6 w-full max-w-[440px] shadow-[var(--th-shadow-modal)]">
+            <h3 className="font-display text-[18px] font-semibold text-th-text mb-2">
+              Force cancel booking?
+            </h3>
+            <p className="font-inter text-[13px] text-th-text-tertiary mb-4">
+              Force cancel bypasses cancellation policy + issues full refund. Continue?
+            </p>
+            <label className="mb-1 block text-[12px] font-medium text-th-text-secondary">
+              Reason (required, min 3 chars)
+            </label>
+            <textarea
+              value={forceReason}
+              onChange={(e) => setForceReason(e.target.value)}
+              rows={3}
+              maxLength={500}
+              placeholder="e.g. Player request, system issue, policy override…"
+              className="mb-2 w-full rounded-lg border border-th-divider bg-th-bg px-3 py-2 font-inter text-[13px] text-th-text focus:border-th-gold focus:outline-none"
+            />
+            {forceError && (
+              <div role="alert" className="mb-3 rounded-lg border border-[#E74C3C]/40 bg-[#E74C3C]/10 px-3 py-2 font-inter text-[12px] text-[#E74C3C]">
+                {forceError}
+              </div>
+            )}
+            <div className="mt-2 flex items-center gap-3">
+              <button
+                onClick={() => setIsForceOpen(false)}
+                disabled={forceBusy}
+                className="flex-1 h-[40px] border border-th-divider text-th-text hover:bg-th-divider font-inter text-[13px] font-medium rounded-lg transition-colors disabled:opacity-50"
+              >
+                Back
+              </button>
+              <button
+                onClick={confirmForceCancel}
+                disabled={forceBusy}
+                className="flex-1 h-[40px] bg-[#E74C3C] hover:bg-[#C0392B] text-white font-inter text-[13px] font-medium rounded-lg transition-colors disabled:opacity-60"
+              >
+                {forceBusy ? "Cancelling…" : "Force cancel + refund"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* No-show modal */}
+      {isNoShowOpen && booking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--th-overlay)] backdrop-blur-sm">
+          <div className="bg-th-card border border-th-divider rounded-2xl p-6 w-full max-w-[420px] shadow-[var(--th-shadow-modal)]">
+            <h3 className="font-display text-[18px] font-semibold text-th-text mb-2">
+              Mark no-show?
+            </h3>
+            <p className="font-inter text-[13px] text-th-text-tertiary mb-4">
+              Select the participant who didn&apos;t show up.
+            </p>
+            <div className="mb-3 flex flex-col gap-2">
+              <label className="flex items-center gap-2 rounded-lg border border-th-divider bg-th-bg px-3 py-2 text-[13px] text-th-text">
+                <input
+                  type="radio"
+                  name="noShowParticipant"
+                  value={booking.hostUserId}
+                  checked={noShowParticipant === booking.hostUserId}
+                  onChange={(e) => setNoShowParticipant(e.target.value)}
+                />
+                {booking.host.displayName}
+                <span className="ml-auto text-[11px] text-th-text-tertiary">Host</span>
+              </label>
+              {booking.opponent && booking.opponentUserId && (
+                <label className="flex items-center gap-2 rounded-lg border border-th-divider bg-th-bg px-3 py-2 text-[13px] text-th-text">
+                  <input
+                    type="radio"
+                    name="noShowParticipant"
+                    value={booking.opponentUserId}
+                    checked={noShowParticipant === booking.opponentUserId}
+                    onChange={(e) => setNoShowParticipant(e.target.value)}
+                  />
+                  {booking.opponent.displayName}
+                  <span className="ml-auto text-[11px] text-th-text-tertiary">Opponent</span>
+                </label>
+              )}
+            </div>
+            {noShowError && (
+              <div role="alert" className="mb-3 rounded-lg border border-[#E74C3C]/40 bg-[#E74C3C]/10 px-3 py-2 font-inter text-[12px] text-[#E74C3C]">
+                {noShowError}
+              </div>
+            )}
+            <div className="mt-2 flex items-center gap-3">
+              <button
+                onClick={() => setIsNoShowOpen(false)}
+                disabled={noShowBusy}
+                className="flex-1 h-[40px] border border-th-divider text-th-text hover:bg-th-divider font-inter text-[13px] font-medium rounded-lg transition-colors disabled:opacity-50"
+              >
+                Back
+              </button>
+              <button
+                onClick={confirmNoShow}
+                disabled={noShowBusy}
+                className="flex-1 h-[40px] bg-[#E74C3C] hover:bg-[#C0392B] text-white font-inter text-[13px] font-medium rounded-lg transition-colors disabled:opacity-60"
+              >
+                {noShowBusy ? "Marking…" : "Mark no-show"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -2,9 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
-import { CaretDown, TrendUp } from "phosphor-react";
+import { TrendUp, TrendDown } from "phosphor-react";
 import { apiFetch, formatAED } from "../../../lib/api";
-import { formatDateShort } from "../../../lib/datetime";
 import PlayerAvatar from "../../../components/PlayerAvatar";
 
 const RevenueAreaChart = dynamic(() => import("../../../components/charts/RevenueAreaChart"), {
@@ -25,120 +24,117 @@ const SparklineArea = dynamic(() => import("../../../components/charts/Sparkline
 });
 
 interface AnalyticsKpis {
+  revenue: number;
+  tablesInUse: number;
+  activeBookings: number;
+  newPlayers: number;
+  totalBookings: number;
+  completedBookings: number;
+  cancelledBookings: number;
+  noShowBookings: number;
+  avgBookingValue: number;
+  completionRate: number;
+  cancellationRate: number;
   revenueToday: number;
   revenueWeek: number;
   revenueMonth: number;
-  avgBookingValue: number;
-  bookingsCount?: number;
-  activePlayersCount?: number;
-  utilizationPct?: number;
+  revenueDeltaPct?: number;
+  newPlayersDeltaPct?: number;
+  totalBookingsDeltaPct?: number;
+  avgBookingValueDeltaPct?: number;
+  completionRateDeltaPct?: number;
+  cancellationRateDeltaPct?: number;
 }
 
-interface PaymentItem {
-  id: string;
-  amount: number;
-  status: string;
-  createdAt: string;
-  booking: {
-    id: string;
-    host: { id: string; displayName: string; avatarUrl: string | null };
-    table: { tableNumber: number; type: string };
-    startAt: string;
-  };
+interface RevenueTrendPoint {
+  date: string;
+  revenue: number;
 }
 
-const UTILIZATION_DATA = [
-  { hour: "10:00", utilization: 25, isPeak: false },
-  { hour: "11:00", utilization: 28, isPeak: false },
-  { hour: "12:00", utilization: 36, isPeak: false },
-  { hour: "13:00", utilization: 42, isPeak: false },
-  { hour: "14:00", utilization: 50, isPeak: false },
-  { hour: "15:00", utilization: 55, isPeak: false },
-  { hour: "16:00", utilization: 60, isPeak: false },
-  { hour: "17:00", utilization: 65, isPeak: false },
-  { hour: "18:00", utilization: 72, isPeak: false },
-  { hour: "19:00", utilization: 78, isPeak: false },
-  { hour: "20:00", utilization: 90, isPeak: true },
-  { hour: "21:00", utilization: 95, isPeak: true },
-  { hour: "22:00", utilization: 88, isPeak: true },
-  { hour: "23:00", utilization: 62, isPeak: false },
-];
+interface TableUtilizationItem {
+  tableId: string;
+  tableNumber: number;
+  type: string;
+  utilization: number;
+  totalBookedMinutes: number;
+}
 
-const SOURCE_DATA = [
-  { id: "src-direct", name: "Direct", value: 45, color: "#D4AF37" },
-  { id: "src-matchmaking", name: "Matchmaking", value: 32, color: "#2ECC71" },
-  { id: "src-referral", name: "Referral", value: 15, color: "#3498DB" },
-  { id: "src-walkin", name: "Walk-in", value: 8, color: "#808080" },
-];
+interface TopPlayerItem {
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  totalSpent: number;
+  gamesPlayed: number;
+}
 
-const PERIOD_PARAM: Record<string, string> = {
-  Day: "1d",
+interface BookingSourceItem {
+  source: string;
+  count: number;
+}
+
+interface AnalyticsResponse {
+  period: string;
+  kpis: AnalyticsKpis;
+  revenueTrend: RevenueTrendPoint[];
+  tableUtilization: TableUtilizationItem[];
+  topPlayers: TopPlayerItem[];
+  bookingSources: BookingSourceItem[];
+}
+
+type PeriodLabel = "Day" | "Week" | "Month" | "Year";
+
+const PERIOD_PARAM: Record<PeriodLabel, "7d" | "30d" | "90d" | "1y"> = {
+  Day: "7d",
   Week: "7d",
   Month: "30d",
-  Year: "365d",
+  Year: "1y",
 };
 
-function periodRevenue(kpis: AnalyticsKpis, period: string): number {
-  if (period === "Day") return kpis.revenueToday;
-  if (period === "Week") return kpis.revenueWeek;
-  return kpis.revenueMonth;
+const PERIOD_DELTA_LABEL: Record<PeriodLabel, string> = {
+  Day: "WoW",
+  Week: "WoW",
+  Month: "MoM",
+  Year: "YoY",
+};
+
+const SOURCE_COLOR: Record<string, string> = {
+  QUICKPLAY: "#D4AF37",
+  PRIVATE: "#2ECC71",
+  TOURNAMENT: "#3498DB",
+  REMATCH: "#9B59B6",
+  WALKIN: "#808080",
+};
+
+function sourceColor(source: string): string {
+  return SOURCE_COLOR[source.toUpperCase()] ?? "#808080";
 }
 
-function buildRevenueTrend(payments: PaymentItem[]): { date: string; value: number }[] {
-  const map = new Map<string, number>();
-  for (const p of payments) {
-    if (p.status !== "CAPTURED" && p.status !== "AUTHORIZED") continue;
-    const key = formatDateShort(p.createdAt);
-    map.set(key, (map.get(key) ?? 0) + p.amount);
-  }
-  return Array.from(map.entries())
-    .map(([date, fils]) => ({ date, value: Math.round(fils / 100) }))
-    .slice(-20);
+function sourceLabel(source: string): string {
+  return source.charAt(0).toUpperCase() + source.slice(1).toLowerCase();
 }
 
-interface TopPlayer {
-  id: string;
-  rank: number;
-  name: string;
-  avatarUrl: string | null;
-  matches: number;
-  revFils: number;
-}
-
-function buildTopPlayers(payments: PaymentItem[]): TopPlayer[] {
-  const map = new Map<string, { name: string; avatarUrl: string | null; totalFils: number; count: number }>();
-  for (const p of payments) {
-    if (p.status !== "CAPTURED" && p.status !== "AUTHORIZED") continue;
-    const { id, displayName, avatarUrl } = p.booking.host;
-    const cur = map.get(id) ?? { name: displayName, avatarUrl, totalFils: 0, count: 0 };
-    cur.totalFils += p.amount;
-    cur.count += 1;
-    map.set(id, cur);
-  }
-  return Array.from(map.entries())
-    .sort((a, b) => b[1].totalFils - a[1].totalFils)
-    .slice(0, 5)
-    .map(([id, v], i) => ({ id, rank: i + 1, name: v.name, avatarUrl: v.avatarUrl, matches: v.count, revFils: v.totalFils }));
+function formatDelta(pct: number | undefined): { text: string; isUp: boolean } | null {
+  if (pct == null || !Number.isFinite(pct)) return null;
+  const sign = pct >= 0 ? "+" : "";
+  const display = (pct * 100).toFixed(1).replace(/\.0$/, "");
+  return { text: `${sign}${display}%`, isUp: pct >= 0 };
 }
 
 export default function AnalyticsPage() {
-  const [activePeriod, setActivePeriod] = useState("Month");
-  const [kpis, setKpis] = useState<AnalyticsKpis | null>(null);
-  const [payments, setPayments] = useState<PaymentItem[]>([]);
+  const [activePeriod, setActivePeriod] = useState<PeriodLabel>("Month");
+  const [data, setData] = useState<AnalyticsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = useCallback(async (period: string) => {
+  const fetchData = useCallback(async (period: PeriodLabel) => {
     setLoading(true);
     setError(null);
     try {
-      const param = PERIOD_PARAM[period] ?? "30d";
-      const [analyticsRes, paymentsRes] = await Promise.all([
-        apiFetch<{ kpis: AnalyticsKpis }>(`/admin/analytics?period=${param}`),
-        apiFetch<{ items: PaymentItem[] }>("/admin/payments?limit=100"),
-      ]);
-      setKpis(analyticsRes.kpis);
-      setPayments(paymentsRes.items);
+      const param = PERIOD_PARAM[period];
+      const res = await apiFetch<AnalyticsResponse>(
+        `/admin/analytics?period=${param}&comparePrev=true`,
+      );
+      setData(res);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load analytics");
     } finally {
@@ -150,41 +146,49 @@ export default function AnalyticsPage() {
     fetchData(activePeriod);
   }, [activePeriod, fetchData]);
 
-  const revenueData = buildRevenueTrend(payments);
-  const topPlayers = buildTopPlayers(payments);
-  const captured = payments.filter((p) => p.status === "CAPTURED" || p.status === "AUTHORIZED");
-  const totalBookings = kpis?.bookingsCount ?? captured.length;
-  const activePlayers = kpis?.activePlayersCount ?? new Set(captured.map((p) => p.booking.host.id)).size;
-  const totalRevenueFils = kpis ? periodRevenue(kpis, activePeriod) : 0;
+  const kpis = data?.kpis;
+  const revenueData = (data?.revenueTrend ?? []).map((p) => ({
+    date: p.date.slice(5),
+    value: Math.round(p.revenue / 100),
+  }));
+  const utilizationData = (data?.tableUtilization ?? []).map((t) => ({
+    hour: `T${t.tableNumber}`,
+    utilization: Math.round(t.utilization * 100),
+    isPeak: t.utilization >= 0.7,
+  }));
+  const sourceData = (data?.bookingSources ?? []).map((s) => ({
+    id: `src-${s.source}`,
+    name: sourceLabel(s.source),
+    value: s.count,
+    color: sourceColor(s.source),
+  }));
+  const totalSources = sourceData.reduce((sum, s) => sum + s.value, 0);
+  const deltaLabel = PERIOD_DELTA_LABEL[activePeriod];
 
   const kpiItems = [
     {
       id: "kpi-revenue",
       title: "Total Revenue",
-      value: loading ? null : formatAED(totalRevenueFils),
-      trend: "+18% MoM",
-      trendColor: "text-[#2ECC71]",
+      value: loading || !kpis ? null : formatAED(kpis.revenue),
+      delta: formatDelta(kpis?.revenueDeltaPct),
     },
     {
       id: "kpi-bookings",
       title: "Total Bookings",
-      value: loading ? null : String(totalBookings),
-      trend: "+9% MoM",
-      trendColor: "text-[#2ECC71]",
+      value: loading || !kpis ? null : String(kpis.totalBookings),
+      delta: formatDelta(kpis?.totalBookingsDeltaPct),
     },
     {
-      id: "kpi-utilization",
-      title: "Avg Utilization",
-      value: loading ? null : (kpis?.utilizationPct != null ? `${kpis.utilizationPct}%` : "N/A"),
-      trend: "+4pp MoM",
-      trendColor: "text-[#D4AF37]",
+      id: "kpi-avg",
+      title: "Avg Booking Value",
+      value: loading || !kpis ? null : formatAED(kpis.avgBookingValue),
+      delta: formatDelta(kpis?.avgBookingValueDeltaPct),
     },
     {
-      id: "kpi-players",
-      title: "Active Players",
-      value: loading ? null : String(activePlayers),
-      trend: "+23% MoM",
-      trendColor: "text-[#2ECC71]",
+      id: "kpi-new-players",
+      title: "New Players",
+      value: loading || !kpis ? null : String(kpis.newPlayers),
+      delta: formatDelta(kpis?.newPlayersDeltaPct),
     },
   ];
 
@@ -208,7 +212,7 @@ export default function AnalyticsPage() {
       <div className="flex items-center justify-between">
         <h1 className="font-display text-[24px] font-semibold text-th-text">Analytics</h1>
         <div className="bg-th-card p-1 rounded-lg border border-[var(--th-border)] flex items-center">
-          {["Day", "Week", "Month", "Year"].map((p) => (
+          {(["Day", "Week", "Month", "Year"] as PeriodLabel[]).map((p) => (
             <button
               key={p}
               onClick={() => setActivePeriod(p)}
@@ -226,35 +230,49 @@ export default function AnalyticsPage() {
 
       {/* Row 1 — KPI Cards */}
       <div className="grid grid-cols-4 gap-4">
-        {kpiItems.map((kpi) => (
-          <div
-            key={kpi.id}
-            className="bg-th-card rounded-2xl p-6 border border-th-divider hover:border-[var(--th-border-medium)] transition-colors relative overflow-hidden group"
-          >
-            <span className="font-inter text-[13px] text-th-text-secondary block mb-3">{kpi.title}</span>
-            <div className="font-display text-[32px] font-bold text-th-text leading-none mb-3">
-              {kpi.value == null ? (
-                <div className="h-8 w-28 animate-pulse rounded bg-th-divider" />
-              ) : (
-                kpi.value
+        {kpiItems.map((kpi) => {
+          const deltaColor = kpi.delta == null
+            ? "text-th-text-tertiary"
+            : kpi.delta.isUp
+              ? "text-[#2ECC71]"
+              : "text-[#E74C3C]";
+          return (
+            <div
+              key={kpi.id}
+              className="bg-th-card rounded-2xl p-6 border border-th-divider hover:border-[var(--th-border-medium)] transition-colors relative overflow-hidden group"
+            >
+              <span className="font-inter text-[13px] text-th-text-secondary block mb-3">{kpi.title}</span>
+              <div className="font-display text-[32px] font-bold text-th-text leading-none mb-3">
+                {kpi.value == null ? (
+                  <div className="h-8 w-28 animate-pulse rounded bg-th-divider" />
+                ) : (
+                  kpi.value
+                )}
+              </div>
+              <div className={`font-inter text-[13px] font-medium flex items-center gap-1.5 ${deltaColor}`}>
+                {kpi.delta == null ? (
+                  <span>—</span>
+                ) : (
+                  <>
+                    {kpi.delta.isUp ? <TrendUp size={16} weight="bold" /> : <TrendDown size={16} weight="bold" />}
+                    {kpi.delta.text} {deltaLabel}
+                  </>
+                )}
+              </div>
+              {revenueData.length > 0 && (
+                <div className="absolute bottom-[-10px] right-[-10px] w-[120px] h-[60px] opacity-20 group-hover:opacity-40 transition-opacity pointer-events-none">
+                  <SparklineArea
+                    data={revenueData.slice(-7).map((d, i) => ({ i, val: d.value }))}
+                    dataKey="val"
+                    stroke="#D4AF37"
+                    fillId={`kpi-spark-${kpi.id}`}
+                    height={60}
+                  />
+                </div>
               )}
             </div>
-            <div className={`font-inter text-[13px] font-medium flex items-center gap-1.5 ${kpi.trendColor}`}>
-              <TrendUp size={16} weight="bold" /> {kpi.trend}
-            </div>
-            {revenueData.length > 0 && (
-              <div className="absolute bottom-[-10px] right-[-10px] w-[120px] h-[60px] opacity-20 group-hover:opacity-40 transition-opacity pointer-events-none">
-                <SparklineArea
-                  data={revenueData.slice(-7).map((d, i) => ({ i, val: d.value }))}
-                  dataKey="val"
-                  stroke="#D4AF37"
-                  fillId={`kpi-spark-${kpi.id}`}
-                  height={60}
-                />
-              </div>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Row 2 — Charts */}
@@ -263,24 +281,30 @@ export default function AnalyticsPage() {
         <div className="flex-[6] bg-th-card rounded-2xl p-6 border border-th-divider">
           <div className="flex justify-between items-center mb-6">
             <h2 className="font-display text-[16px] font-semibold text-th-text">Revenue Trend</h2>
-            <button className="font-inter text-[12px] text-th-text-tertiary hover:text-th-text px-2 py-1 bg-[var(--th-hover)] rounded flex items-center gap-1">
-              Last 30 Days <CaretDown size={12} />
-            </button>
+            <span className="font-inter text-[12px] text-th-text-tertiary">{activePeriod}</span>
           </div>
           <div className="h-[280px] w-full">
             {loading ? (
               <div className="h-full animate-pulse rounded bg-th-divider" />
+            ) : revenueData.length === 0 ? (
+              <div className="h-full flex items-center justify-center font-inter text-[13px] text-th-text-tertiary">No revenue yet.</div>
             ) : (
               <RevenueAreaChart data={revenueData} />
             )}
           </div>
         </div>
 
-        {/* Table Utilization by Hour (40%) */}
+        {/* Table Utilization (40%) */}
         <div className="flex-[4] bg-th-card rounded-2xl p-6 border border-th-divider">
-          <h2 className="font-display text-[16px] font-semibold text-th-text mb-6">Table Utilization by Hour</h2>
+          <h2 className="font-display text-[16px] font-semibold text-th-text mb-6">Table Utilization</h2>
           <div className="h-[280px] w-full">
-            <UtilizationBarChart data={UTILIZATION_DATA} />
+            {loading ? (
+              <div className="h-full animate-pulse rounded bg-th-divider" />
+            ) : utilizationData.length === 0 ? (
+              <div className="h-full flex items-center justify-center font-inter text-[13px] text-th-text-tertiary">No tables.</div>
+            ) : (
+              <UtilizationBarChart data={utilizationData} />
+            )}
           </div>
         </div>
       </div>
@@ -291,7 +315,6 @@ export default function AnalyticsPage() {
         <div className="flex-1 bg-th-card rounded-2xl p-6 border border-th-divider overflow-hidden flex flex-col">
           <div className="flex justify-between items-center mb-6">
             <h2 className="font-display text-[16px] font-semibold text-th-text">Top Players</h2>
-            <button className="text-[#D4AF37] font-inter text-[12px] hover:underline">View All</button>
           </div>
           <div className="flex-1 overflow-x-auto">
             {loading ? (
@@ -306,30 +329,30 @@ export default function AnalyticsPage() {
                   <tr className="border-b border-th-divider">
                     <th className="py-3 px-4 font-inter text-[12px] text-th-text-tertiary font-medium uppercase tracking-wider w-[60px]">Rank</th>
                     <th className="py-3 px-4 font-inter text-[12px] text-th-text-tertiary font-medium uppercase tracking-wider">Player</th>
-                    <th className="py-3 px-4 font-inter text-[12px] text-th-text-tertiary font-medium uppercase tracking-wider">Matches</th>
-                    <th className="py-3 px-4 font-inter text-[12px] text-th-text-tertiary font-medium uppercase tracking-wider">Revenue</th>
+                    <th className="py-3 px-4 font-inter text-[12px] text-th-text-tertiary font-medium uppercase tracking-wider">Games</th>
+                    <th className="py-3 px-4 font-inter text-[12px] text-th-text-tertiary font-medium uppercase tracking-wider">Spent</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {topPlayers.map((player) => (
-                    <tr key={player.id} className="border-b border-th-divider/50 hover:bg-th-divider/50 transition-colors">
-                      <td className="py-4 px-4 font-display text-[14px] font-semibold text-th-text-tertiary">#{player.rank}</td>
+                  {(data?.topPlayers ?? []).slice(0, 5).map((player, i) => (
+                    <tr key={player.userId} className="border-b border-th-divider/50 hover:bg-th-divider/50 transition-colors">
+                      <td className="py-4 px-4 font-display text-[14px] font-semibold text-th-text-tertiary">#{i + 1}</td>
                       <td className="py-4 px-4">
                         <div className="flex items-center gap-3">
                           <PlayerAvatar
                             url={player.avatarUrl ?? null}
-                            name={player.name}
+                            name={player.displayName}
                             size={32}
                             className="border border-[#3498DB]"
                           />
-                          <span className="font-inter text-[14px] font-medium text-th-text">{player.name}</span>
+                          <span className="font-inter text-[14px] font-medium text-th-text">{player.displayName}</span>
                         </div>
                       </td>
-                      <td className="py-4 px-4 font-inter text-[13px] text-th-text-secondary">{player.matches}</td>
-                      <td className="py-4 px-4 font-mono text-[14px] font-semibold text-[#D4AF37]">{formatAED(player.revFils)}</td>
+                      <td className="py-4 px-4 font-inter text-[13px] text-th-text-secondary">{player.gamesPlayed}</td>
+                      <td className="py-4 px-4 font-mono text-[14px] font-semibold text-[#D4AF37]">{formatAED(player.totalSpent)}</td>
                     </tr>
                   ))}
-                  {topPlayers.length === 0 && (
+                  {(data?.topPlayers ?? []).length === 0 && (
                     <tr>
                       <td colSpan={4} className="py-8 text-center font-inter text-[13px] text-th-text-tertiary">No data</td>
                     </tr>
@@ -344,16 +367,22 @@ export default function AnalyticsPage() {
         <div className="flex-1 bg-th-card rounded-2xl p-6 border border-th-divider flex flex-col items-center justify-center relative">
           <h2 className="font-display text-[16px] font-semibold text-th-text absolute top-6 left-6">Booking Source</h2>
           <div className="w-[280px] h-[280px] relative mt-4">
-            <SourcePieChart data={SOURCE_DATA} />
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="font-display text-[28px] font-bold text-th-text">
-                {loading ? "—" : totalBookings}
-              </span>
-              <span className="font-inter text-[11px] text-th-text-tertiary uppercase tracking-wider mt-1">Total Bookings</span>
-            </div>
+            {sourceData.length === 0 ? (
+              <div className="w-full h-full flex items-center justify-center font-inter text-[13px] text-th-text-tertiary">No bookings.</div>
+            ) : (
+              <>
+                <SourcePieChart data={sourceData} />
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="font-display text-[28px] font-bold text-th-text">
+                    {loading ? "—" : totalSources}
+                  </span>
+                  <span className="font-inter text-[11px] text-th-text-tertiary uppercase tracking-wider mt-1">Total Bookings</span>
+                </div>
+              </>
+            )}
           </div>
-          <div className="flex items-center gap-6 mt-4">
-            {SOURCE_DATA.map((s) => (
+          <div className="flex items-center gap-6 mt-4 flex-wrap justify-center">
+            {sourceData.map((s) => (
               <div key={s.id} className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: s.color }} />
                 <span className="font-inter text-[13px] text-th-text-secondary">{s.name}</span>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Calendar, Clock, EnvelopeSimple } from "phosphor-react";
+import { Calendar, Clock, EnvelopeSimple, TrendUp, TrendDown } from "phosphor-react";
 import BookingsCalendarView, {
   type CalBookingItem,
 } from "../../../components/BookingsCalendarView";
@@ -14,6 +14,20 @@ import { formatDateShort, formatTime } from "../../../lib/datetime";
 interface BookingKpis {
   revenueToday: number;
   bookingsCount?: number;
+}
+
+interface CancellationRateResponse {
+  rate: number;
+  cancelled: number;
+  total: number;
+  deltaPct?: number | null;
+}
+
+function formatPctSigned(pct: number | null | undefined): { text: string; isUp: boolean } | null {
+  if (pct == null || !Number.isFinite(pct)) return null;
+  const value = pct * 100;
+  const isUp = value >= 0;
+  return { text: `${isUp ? "+" : ""}${value.toFixed(1)}%`, isUp };
 }
 
 const STATUS_BADGE: Record<
@@ -74,15 +88,23 @@ export default function BookingsPage() {
   const { setIsBookingOpen } = useAdmin();
   const [selected, setSelected] = useState<CalBookingItem | null>(null);
   const [isCancelOpen, setIsCancelOpen] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const [bookingKpis, setBookingKpis] = useState<BookingKpis | null>(null);
+  const [cancellationRate, setCancellationRate] = useState<CancellationRateResponse | null>(null);
   const [kpiLoading, setKpiLoading] = useState(true);
   const [kpiError, setKpiError] = useState(false);
 
   const fetchBookingKpis = useCallback(async () => {
     try {
-      const data = await apiFetch<{ kpis: BookingKpis }>("/admin/analytics?period=1d");
-      setBookingKpis(data.kpis);
+      const [analyticsData, rateData] = await Promise.all([
+        apiFetch<{ kpis: BookingKpis }>("/admin/analytics?period=7d"),
+        apiFetch<CancellationRateResponse>("/admin/bookings/cancellation-rate?period=30d"),
+      ]);
+      setBookingKpis(analyticsData.kpis);
+      setCancellationRate(rateData);
       setKpiError(false);
     } catch {
       setKpiError(true);
@@ -98,6 +120,29 @@ export default function BookingsPage() {
     fetchBookingKpis();
   }, [fetchBookingKpis]);
 
+  const handleConfirmCancel = useCallback(async () => {
+    if (!selected) return;
+    setIsCancelling(true);
+    setCancelError(null);
+    try {
+      await apiFetch(`/admin/bookings/${selected.id}/cancel`, { method: "POST" });
+      setIsCancelOpen(false);
+      setSelected(null);
+      setRefreshKey((k) => k + 1);
+      fetchBookingKpis();
+    } catch (err) {
+      setCancelError(err instanceof Error ? err.message : "Cancel failed");
+    } finally {
+      setIsCancelling(false);
+    }
+  }, [selected, fetchBookingKpis]);
+
+  const rateDelta = formatPctSigned(cancellationRate?.deltaPct);
+  const ratePctText =
+    cancellationRate != null && Number.isFinite(cancellationRate.rate)
+      ? `${(cancellationRate.rate * 100).toFixed(1)}%`
+      : "--";
+
   const badge = selected ? (STATUS_BADGE[selected.state] ?? STATUS_BADGE.PENDING) : null;
 
   return (
@@ -108,7 +153,11 @@ export default function BookingsPage() {
           Bookings
         </h1>
         <div className="flex items-center gap-4">
-          <button className="flex items-center gap-2 px-4 h-[40px] bg-th-card border border-th-border rounded-lg text-[13px] font-medium text-th-text hover:bg-th-divider transition-colors">
+          <button
+            disabled
+            title="Coming soon"
+            className="flex items-center gap-2 px-4 h-[40px] bg-th-card border border-th-border rounded-lg text-[13px] font-medium text-th-text disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
             <Calendar size={18} />
             <span>This Week</span>
             <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
@@ -177,9 +226,20 @@ export default function BookingsPage() {
             </span>
             <div className="flex items-baseline gap-2">
               <span className="font-display text-[20px] font-bold text-th-text leading-none">
-                {kpiLoading ? "..." : "--"}
+                {kpiLoading ? "..." : kpiError ? "--" : ratePctText}
               </span>
-              <span className="font-inter text-[12px] text-th-text-tertiary">—</span>
+              {rateDelta && !kpiLoading && !kpiError ? (
+                <span
+                  className={`flex items-center gap-1 font-inter text-[12px] font-medium ${
+                    rateDelta.isUp ? "text-[#E74C3C]" : "text-[#2ECC71]"
+                  }`}
+                >
+                  {rateDelta.isUp ? <TrendUp size={12} weight="bold" /> : <TrendDown size={12} weight="bold" />}
+                  {rateDelta.text}
+                </span>
+              ) : (
+                <span className="font-inter text-[12px] text-th-text-tertiary">—</span>
+              )}
             </div>
           </div>
         </div>
@@ -192,6 +252,7 @@ export default function BookingsPage() {
           <BookingsCalendarView
             activeCenterId={activeCenterId}
             onSelectBooking={setSelected}
+            refreshKey={refreshKey}
           />
         </div>
 
@@ -213,7 +274,7 @@ export default function BookingsPage() {
                       {selected.host.displayName}
                     </h2>
                     <div className="font-inter text-[12px] text-th-text-tertiary mt-0.5">
-                      +971 50 000 0000
+                      {selected.host?.phone ?? "—"}
                     </div>
                   </div>
                 </div>
@@ -262,10 +323,10 @@ export default function BookingsPage() {
                   </span>
                   <div className="flex flex-col items-end">
                     <span className="font-mono text-[16px] font-semibold text-[#D4AF37]">
-                      {formatAED(Math.round((selected.durationMinutes / 60) * 120 * 100), { decimals: 0 })}
+                      {formatAED(selected.totalAmount ?? 0, { decimals: 0 })}
                     </span>
                     <span className="font-inter text-[11px] text-th-text-tertiary">
-                      Paid via Tabby
+                      {selected.payment?.method ? `Paid via ${selected.payment.method}` : "Payment pending"}
                     </span>
                   </div>
                 </div>
@@ -274,7 +335,7 @@ export default function BookingsPage() {
                     Notes
                   </span>
                   <div className="bg-th-elevated p-3 rounded-lg border border-th-divider font-inter text-[13px] text-th-text-secondary">
-                    No notes.
+                    {selected.notes ?? "No notes."}
                   </div>
                 </div>
               </div>
@@ -314,21 +375,28 @@ export default function BookingsPage() {
             <h3 className="font-display text-[18px] font-semibold text-th-text mb-2">
               Cancel this booking?
             </h3>
-            <p className="font-inter text-[14px] text-th-text-tertiary mb-6">
+            <p className="font-inter text-[14px] text-th-text-tertiary mb-4">
               Player will be notified and refunded per policy.
             </p>
+            {cancelError && (
+              <div role="alert" className="mb-4 rounded-lg border border-[#E74C3C]/40 bg-[#E74C3C]/10 px-3 py-2 font-inter text-[12px] text-[#E74C3C]">
+                {cancelError}
+              </div>
+            )}
             <div className="flex items-center gap-3">
               <button
-                onClick={() => setIsCancelOpen(false)}
-                className="flex-1 h-[40px] border border-th-divider text-th-text hover:bg-th-divider font-inter text-[13px] font-medium rounded-lg transition-colors"
+                onClick={() => { setIsCancelOpen(false); setCancelError(null); }}
+                disabled={isCancelling}
+                className="flex-1 h-[40px] border border-th-divider text-th-text hover:bg-th-divider font-inter text-[13px] font-medium rounded-lg transition-colors disabled:opacity-50"
               >
                 Keep booking
               </button>
               <button
-                onClick={() => setIsCancelOpen(false)}
-                className="flex-1 h-[40px] bg-[#E74C3C] hover:bg-[#C0392B] text-white font-inter text-[13px] font-medium rounded-lg transition-colors"
+                onClick={handleConfirmCancel}
+                disabled={isCancelling}
+                className="flex-1 h-[40px] bg-[#E74C3C] hover:bg-[#C0392B] text-white font-inter text-[13px] font-medium rounded-lg transition-colors disabled:opacity-60"
               >
-                Yes, cancel
+                {isCancelling ? "Cancelling…" : "Yes, cancel"}
               </button>
             </div>
           </div>
