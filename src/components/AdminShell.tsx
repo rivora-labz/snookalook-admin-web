@@ -220,15 +220,6 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
         <AdminHeader />
         <main className="flex-1 overflow-y-auto bg-th-bg p-8 relative">
           {children}
-          <button
-            data-testid="sentry-probe-button"
-            onClick={() => {
-              throw new Error("sentry-liveness-probe-admin-web-1778934626");
-            }}
-            className="fixed bottom-4 right-4 z-[200] px-3 py-2 rounded-lg bg-red-600 text-white text-[12px] font-mono shadow-lg hover:bg-red-700"
-          >
-            __sentry_probe__
-          </button>
         </main>
       </div>
 
