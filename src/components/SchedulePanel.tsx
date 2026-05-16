@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { apiFetch } from "../lib/api";
 import { formatTime } from "../lib/datetime";
+import PlayerAvatar from "./PlayerAvatar";
 
 interface ScheduleSlot {
   time: string;
@@ -77,16 +78,13 @@ export default function SchedulePanel() {
                 </div>
                 
                 <div className="flex-1 flex items-center gap-3 px-3 border-l border-th-divider ml-1">
-                  <div className="w-[28px] h-[28px] rounded-full bg-th-divider flex-shrink-0 overflow-hidden ring-1 ring-th-border-medium">
-                    {/* TODO: self-host avatars via Supabase storage; allowlist policy pending */}
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={slot.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(slot.name)}&background=random`}
-                      alt=""
-                      loading="lazy"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
+                  <PlayerAvatar
+                    url={slot.avatarUrl}
+                    name={slot.name}
+                    size={28}
+                    className="ring-1 ring-th-border-medium"
+                  />
+
                   <div className="flex flex-col min-w-0">
                     <span className="font-inter text-[13px] font-bold text-th-text truncate">{slot.name}</span>
                     <span className="font-inter text-[11px] font-medium text-th-text-tertiary">{slot.table}</span>

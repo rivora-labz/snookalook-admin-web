@@ -10,7 +10,6 @@ export default function AdminError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // TODO iter-5: wire Sentry.captureException(error)
     // eslint-disable-next-line no-console
     console.error("admin-error", error);
   }, [error]);

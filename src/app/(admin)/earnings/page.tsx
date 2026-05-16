@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
-import Image from "next/image";
 import {
   FunnelSimple,
   DownloadSimple,
@@ -23,6 +22,7 @@ import {
 import { toast } from "sonner";
 import { apiFetch, apiFetchBlob, formatAED } from "../../../lib/api";
 import { formatDate, formatTime } from "../../../lib/datetime";
+import PlayerAvatar from "../../../components/PlayerAvatar";
 import Drawer from "../../../components/Drawer";
 
 const SparklineArea = dynamic(() => import("../../../components/charts/SparklineArea"), {
@@ -439,19 +439,10 @@ export default function EarningsPage() {
                       <div className="font-inter text-[12px] text-th-text-tertiary">{txn.time}</div>
                     </div>
                     <div className="flex-1 flex items-center gap-2 min-w-0">
-                      <Image
-                        src={
-                          txn.player.avatarUrl ??
-                          `https://i.pravatar.cc/28?u=${txn.player.id}`
-                        }
-                        alt=""
-                        width={28}
-                        height={28}
-                        unoptimized
-                        className="w-7 h-7 rounded-full shrink-0"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = "none";
-                        }}
+                      <PlayerAvatar
+                        url={txn.player.avatarUrl ?? null}
+                        name={txn.player.name}
+                        size={28}
                       />
                       <div className="min-w-0">
                         <div className="font-inter text-[13px] font-medium text-th-text truncate">

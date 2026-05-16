@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
-import Image from "next/image";
 import { CaretDown, TrendUp } from "phosphor-react";
 import { apiFetch, formatAED } from "../../../lib/api";
 import { formatDateShort } from "../../../lib/datetime";
+import PlayerAvatar from "../../../components/PlayerAvatar";
 
 const RevenueAreaChart = dynamic(() => import("../../../components/charts/RevenueAreaChart"), {
   ssr: false,
@@ -316,17 +316,12 @@ export default function AnalyticsPage() {
                       <td className="py-4 px-4 font-display text-[14px] font-semibold text-th-text-tertiary">#{player.rank}</td>
                       <td className="py-4 px-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full overflow-hidden border border-[#3498DB] flex-shrink-0">
-                            <Image
-                              src={player.avatarUrl ?? `https://i.pravatar.cc/100?u=${player.id}`}
-                              alt={player.name}
-                              width={32}
-                              height={32}
-                              unoptimized
-                              className="w-full h-full object-cover"
-                              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                            />
-                          </div>
+                          <PlayerAvatar
+                            url={player.avatarUrl ?? null}
+                            name={player.name}
+                            size={32}
+                            className="border border-[#3498DB]"
+                          />
                           <span className="font-inter text-[14px] font-medium text-th-text">{player.name}</span>
                         </div>
                       </td>

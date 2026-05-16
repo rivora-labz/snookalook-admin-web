@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import Image from "next/image";
 import type { TableStatus, TableType } from "@rivora-labz/snook-shared";
 import {
   GridFour,
@@ -16,6 +15,7 @@ import { apiFetch, formatAED } from "../../../lib/api";
 import { formatTime } from "../../../lib/datetime";
 import AddTableModal from "../../../components/AddTableModal";
 import EditTableModal, { type EditableTable } from "../../../components/EditTableModal";
+import PlayerAvatar from "../../../components/PlayerAvatar";
 
 interface TableItem {
   id: string;
@@ -245,19 +245,10 @@ export default function TablesIndexClient() {
                   {showPlayerRow && (
                     <div className="mt-3 flex items-center gap-2 bg-th-elevated p-2 rounded-lg border border-th-divider">
                       {t.status === "IN_PLAY" && booking && (
-                        <Image
-                          src={
-                            booking.host.avatarUrl ??
-                            `https://i.pravatar.cc/24?u=${booking.host.id}`
-                          }
-                          alt=""
-                          width={24}
-                          height={24}
-                          unoptimized
-                          className="w-6 h-6 rounded-full"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).style.display = "none";
-                          }}
+                        <PlayerAvatar
+                          url={booking.host.avatarUrl ?? null}
+                          name={booking.host.displayName}
+                          size={24}
                         />
                       )}
                       <span className="font-inter text-[12px] text-th-text truncate">

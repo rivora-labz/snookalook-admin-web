@@ -5,6 +5,7 @@ import { Calendar, Clock, EnvelopeSimple } from "phosphor-react";
 import BookingsCalendarView, {
   type CalBookingItem,
 } from "../../../components/BookingsCalendarView";
+import PlayerAvatar from "../../../components/PlayerAvatar";
 import { useActiveCenterId } from "../../../lib/active-center";
 import { useAdmin } from "../../../lib/AdminContext";
 import { apiFetch, formatAED } from "../../../lib/api";
@@ -201,16 +202,12 @@ export default function BookingsPage() {
               {/* Player header */}
               <div className="flex justify-between items-start mb-6">
                 <div className="flex items-center gap-3">
-                  <div className="w-[48px] h-[48px] rounded-full overflow-hidden border border-th-border-medium">
-                    {/* TODO: self-host avatars via Supabase storage; allowlist policy pending */}
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={`https://i.pravatar.cc/150?u=${selected.id}`}
-                      alt={selected.host.displayName}
-                      loading="lazy"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
+                  <PlayerAvatar
+                    url={null}
+                    name={selected.host.displayName}
+                    size={48}
+                    className="border border-th-border-medium"
+                  />
                   <div>
                     <h2 className="font-display text-[18px] font-semibold text-th-text">
                       {selected.host.displayName}

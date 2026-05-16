@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import Image from "next/image";
 import { X, Check, WarningCircle } from "phosphor-react";
 import { Toaster, toast } from "sonner";
 import AdminNav from "./AdminNav";
 import AdminHeader from "./AdminHeader";
 import DrawerOverlay from "./DrawerOverlay";
+import PlayerAvatar from "./PlayerAvatar";
 import { AdminProvider, useAdmin } from "../lib/AdminContext";
 
 const ACTIVITY_MOCKS = [
@@ -158,14 +158,7 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
             <div className="relative">
               {bookingPlayerAvatar && (
                 <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                  <Image
-                    src={`https://i.pravatar.cc/100?u=${bookingPlayerAvatar}`}
-                    width={20}
-                    height={20}
-                    unoptimized
-                    className="w-5 h-5 rounded-full"
-                    alt=""
-                  />
+                  <PlayerAvatar url={null} name={bookingPlayer || "?"} size={20} />
                 </div>
               )}
               <input
@@ -192,14 +185,7 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
                     className="px-3 h-[36px] flex items-center justify-between hover:bg-[var(--th-hover)] cursor-pointer transition-colors"
                   >
                     <div className="flex items-center gap-3">
-                      <Image
-                        src={`https://i.pravatar.cc/100?u=${p.avatar}`}
-                        width={24}
-                        height={24}
-                        unoptimized
-                        className="w-6 h-6 rounded-full"
-                        alt=""
-                      />
+                      <PlayerAvatar url={null} name={p.name} size={24} />
                       <span className="font-inter text-th-text text-[13px] font-medium">
                         {p.name}
                       </span>
