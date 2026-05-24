@@ -41,7 +41,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchKpis();
-    const id = setInterval(fetchKpis, 30_000);
+    const tick = () => { if (document.visibilityState === "visible") fetchKpis(); };
+    const id = setInterval(tick, 30_000);
     return () => clearInterval(id);
   }, [fetchKpis]);
 

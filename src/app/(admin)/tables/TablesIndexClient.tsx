@@ -110,7 +110,8 @@ export default function TablesIndexClient() {
 
   useEffect(() => {
     fetchTables();
-    const interval = setInterval(fetchTables, 15_000);
+    const tick = () => { if (document.visibilityState === "visible") fetchTables(); };
+    const interval = setInterval(tick, 15_000);
     return () => clearInterval(interval);
   }, [fetchTables]);
 

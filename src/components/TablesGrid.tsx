@@ -93,7 +93,8 @@ export function TablesGrid() {
   // Polling fallback. Runs alongside WS — cheap, harmless dedup. Drives
   // freshness in dev mode (no WS) and bridges any reconnect gaps.
   useEffect(() => {
-    const id = setInterval(fetchTables, 30_000);
+    const tick = () => { if (document.visibilityState === "visible") fetchTables(); };
+    const id = setInterval(tick, 30_000);
     return () => clearInterval(id);
   }, [fetchTables]);
 

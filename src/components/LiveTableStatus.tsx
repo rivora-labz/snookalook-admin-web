@@ -48,7 +48,8 @@ export default function LiveTableStatus() {
 
   useEffect(() => {
     kickFetch();
-    const id = setInterval(kickFetch, 30_000);
+    const tick = () => { if (document.visibilityState === "visible") kickFetch(); };
+    const id = setInterval(tick, 30_000);
     return () => {
       clearInterval(id);
       abortRef.current?.abort();
