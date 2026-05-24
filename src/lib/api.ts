@@ -2,15 +2,22 @@ import { createClient } from "./supabase/client";
 import { API_BASE } from "./api-base";
 import { getRuntimeAuthMode, readAdminAccessTokenCookie } from "./runtime-auth";
 
-const AUTH_MODE = getRuntimeAuthMode();
-
 // Dev-only fallback: backend (NODE_ENV !== "production") accepts
 // `X-Dev-User: <userId>` instead of a real Supabase JWT. Set
 // NEXT_PUBLIC_DEV_USER_ID in .env.local to the seeded OWNER user uuid.
 const DEV_USER_ID = process.env.NEXT_PUBLIC_DEV_USER_ID ?? "";
 
+export class MisconfiguredAuth extends Error {
+  constructor(message = "Auth misconfigured: dev mode requires NEXT_PUBLIC_DEV_USER_ID.") {
+    super(message);
+    this.name = "MisconfiguredAuth";
+  }
+}
+
 async function getAuthHeader(): Promise<Record<string, string>> {
-  if (AUTH_MODE === "supabase") {
+  const authMode = getRuntimeAuthMode();
+
+  if (authMode === "supabase") {
     if (typeof window === "undefined") return {};
     const supabase = createClient();
     const { data: { session } } = await supabase.auth.getSession();
@@ -20,7 +27,7 @@ async function getAuthHeader(): Promise<Record<string, string>> {
     return {};
   }
 
-  if (AUTH_MODE === "backend") {
+  if (authMode === "backend") {
     const accessToken = readAdminAccessTokenCookie();
     return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
   }
@@ -28,7 +35,7 @@ async function getAuthHeader(): Promise<Record<string, string>> {
   if (DEV_USER_ID) {
     return { "X-Dev-User": DEV_USER_ID };
   }
-  return { Authorization: "Bearer PLACEHOLDER" };
+  throw new MisconfiguredAuth();
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -43,7 +50,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     },
   });
 
-  if (res.status === 401 && AUTH_MODE !== "dev" && typeof window !== "undefined") {
+  if (res.status === 401 && getRuntimeAuthMode() !== "dev" && typeof window !== "undefined") {
     window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
     throw new ApiError(401, "UNAUTHORIZED", "Session expired.");
   }
@@ -89,7 +96,7 @@ export async function apiFetchBlob(path: string): Promise<Blob> {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { ...authHeader },
   });
-  if (res.status === 401 && AUTH_MODE !== "dev" && typeof window !== "undefined") {
+  if (res.status === 401 && getRuntimeAuthMode() !== "dev" && typeof window !== "undefined") {
     window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
     throw new ApiError(401, "UNAUTHORIZED", "Session expired.");
   }
@@ -109,7 +116,7 @@ export async function apiFetchFormData<T>(path: string, body: FormData): Promise
     body,
   });
 
-  if (res.status === 401 && AUTH_MODE !== "dev" && typeof window !== "undefined") {
+  if (res.status === 401 && getRuntimeAuthMode() !== "dev" && typeof window !== "undefined") {
     window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
     throw new ApiError(401, "UNAUTHORIZED", "Session expired.");
   }

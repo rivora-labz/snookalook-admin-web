@@ -1,4 +1,5 @@
 import { io, type Socket } from "socket.io-client";
+import * as Sentry from "@sentry/nextjs";
 import { createClient } from "./supabase/client";
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "";
@@ -36,6 +37,16 @@ export async function connectSocket(): Promise<Socket | null> {
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 10_000,
+    });
+
+    s.on("connect", () => {
+      Sentry.addBreadcrumb({ category: "ws", level: "info", message: "socket.connect", data: { id: s.id } });
+    });
+    s.on("disconnect", (reason) => {
+      Sentry.addBreadcrumb({ category: "ws", level: "warning", message: "socket.disconnect", data: { reason } });
+    });
+    s.on("connect_error", (err: Error) => {
+      Sentry.addBreadcrumb({ category: "ws", level: "error", message: "socket.error", data: { message: err.message } });
     });
 
     s.connect();

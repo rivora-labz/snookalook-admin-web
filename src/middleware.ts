@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import * as Sentry from "@sentry/nextjs";
 import { API_BASE } from "./lib/api-base";
 import { ADMIN_ACCESS_TOKEN_COOKIE, getRuntimeAuthMode, getSupabaseConfig } from "./lib/runtime-auth";
 
@@ -9,7 +10,7 @@ type StaffStatus = "OK" | "NOT_STAFF" | "UNAUTH" | "ERROR";
 type StaffRole = "OWNER" | "MANAGER" | "STAFF" | "FOUNDER";
 type StaffCheck = { status: StaffStatus; role: StaffRole | null };
 
-async function checkStaff(headers: Record<string, string>): Promise<StaffCheck> {
+async function checkStaffOnce(headers: Record<string, string>): Promise<StaffCheck> {
   try {
     const res = await fetch(`${API_BASE}/staff/me`, {
       headers,
@@ -24,9 +25,16 @@ async function checkStaff(headers: Record<string, string>): Promise<StaffCheck> 
     if (res.status === 401) return { status: "UNAUTH", role: null };
     if (res.status === 403) return { status: "NOT_STAFF", role: null };
     return { status: "ERROR", role: null };
-  } catch {
+  } catch (err) {
+    Sentry.captureException(err, { tags: { path: "middleware/checkStaff" } });
     return { status: "ERROR", role: null };
   }
+}
+
+async function checkStaff(headers: Record<string, string>): Promise<StaffCheck> {
+  const first = await checkStaffOnce(headers);
+  if (first.status !== "ERROR") return first;
+  return checkStaffOnce(headers);
 }
 
 function redirectTo(req: NextRequest, pathname: string, withNext?: string) {
