@@ -13,7 +13,7 @@ import {
   Cell,
 } from "recharts";
 
-export interface TableUtilizationItem {
+interface TableUtilizationItem {
   tableId: string;
   tableNumber: number;
   type: string;
@@ -21,7 +21,7 @@ export interface TableUtilizationItem {
   totalBookedMinutes: number;
 }
 
-export interface TopPlayerItem {
+interface TopPlayerItem {
   userId: string;
   displayName: string;
   avatarUrl: string | null;
@@ -29,7 +29,7 @@ export interface TopPlayerItem {
   gamesPlayed: number;
 }
 
-export interface BookingSourceItem {
+interface BookingSourceItem {
   matchMode: string;
   count: number;
 }

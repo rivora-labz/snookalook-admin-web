@@ -21,10 +21,6 @@ export interface StaffContext {
   };
 }
 
-export function isFounder(ctx: StaffContext | null | undefined): boolean {
-  return ctx?.role === "FOUNDER";
-}
-
 export interface ServerSession {
   userId: string;
   accessToken: string;

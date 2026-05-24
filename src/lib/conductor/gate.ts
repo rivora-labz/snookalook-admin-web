@@ -27,13 +27,3 @@ export function validateAgentName(agent: unknown): agent is string {
   return typeof agent === "string" && AGENT_REGEX.test(agent);
 }
 
-export const FLEET_AGENTS = [
-  "android",
-  "ios",
-  "backend",
-  "admin-web",
-  "fcm",
-  "bnpl-ios",
-  "architect",
-  "herald",
-] as const;
