@@ -73,7 +73,8 @@ const FALLBACK: CenterDetail = {
 
 const aed = (fils: number) => formatAED(fils, { decimals: 0 });
 
-export default async function CenterDetailPage({ params }: { params: { id: string } }) {
+export default async function CenterDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const data = await masterFetchSafe<CenterDetail>(`/centers/${params.id}`, FALLBACK);
   const c = data.center;
 

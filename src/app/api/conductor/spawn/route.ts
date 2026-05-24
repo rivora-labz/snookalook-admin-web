@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 const pExecFile = promisify(execFile);
 
 export async function POST(req: Request) {
-  if (!isDevLocalhost()) return NextResponse.json({ error: "not found" }, { status: 404 });
+  if (!(await isDevLocalhost())) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   let body: { agent?: unknown };
   try {

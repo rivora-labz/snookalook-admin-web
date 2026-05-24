@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  if (!isDevLocalhost()) return NextResponse.json({ error: "not found" }, { status: 404 });
+  if (!(await isDevLocalhost())) return NextResponse.json({ error: "not found" }, { status: 404 });
   const url = new URL(req.url);
   const linesParam = Number(url.searchParams.get("lines") ?? 200);
   const lineCount = Math.max(1, Math.min(1000, isNaN(linesParam) ? 200 : linesParam));

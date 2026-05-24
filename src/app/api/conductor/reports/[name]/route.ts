@@ -8,8 +8,9 @@ export const dynamic = "force-dynamic";
 
 const NAME_REGEX = /^[a-zA-Z0-9._-]+\.md$/;
 
-export async function GET(_req: Request, { params }: { params: { name: string } }) {
-  if (!isDevLocalhost()) return NextResponse.json({ error: "not found" }, { status: 404 });
+export async function GET(_req: Request, props: { params: Promise<{ name: string }> }) {
+  const params = await props.params;
+  if (!(await isDevLocalhost())) return NextResponse.json({ error: "not found" }, { status: 404 });
   if (!NAME_REGEX.test(params.name)) {
     return NextResponse.json({ error: "bad name" }, { status: 400 });
   }

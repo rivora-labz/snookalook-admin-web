@@ -1,5 +1,5 @@
 import KpiGrid, { KpiCard } from "../../../components/master/KpiGrid";
-import { masterFetchSafe } from "../../../lib/master-api";
+import { masterFetchOrError } from "../../../lib/master-api";
 import { formatAED } from "../../../lib/currency";
 import { formatDateTime } from "../../../lib/datetime";
 
@@ -36,7 +36,7 @@ const FALLBACK: Overview = {
 const aed = (fils: number) => formatAED(fils, { decimals: 0 });
 
 export default async function OverviewPage() {
-  const data = await masterFetchSafe<Overview>("/overview", FALLBACK);
+  const { data, error } = await masterFetchOrError<Overview>("/overview", FALLBACK);
 
   return (
     <div className="flex flex-col gap-8">
@@ -53,6 +53,13 @@ export default async function OverviewPage() {
           Generated {formatDateTime(data.generatedAt)}
         </div>
       </header>
+
+      {error && (
+        <div className="rounded-md border border-[#E74C3C]/40 bg-[#E74C3C]/10 p-4 font-mono text-[12px] text-[#E74C3C]">
+          <div className="font-semibold mb-1">Master API fetch failed (showing zeros as fallback):</div>
+          <div className="break-all">{error}</div>
+        </div>
+      )}
 
       <section>
         <h2 className="font-inter text-[12px] uppercase tracking-[0.18em] text-th-text-tertiary mb-3">

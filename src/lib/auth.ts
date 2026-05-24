@@ -39,7 +39,7 @@ const DEV_STAFF: StaffContext = {
 export async function getServerSession(): Promise<ServerSession | null> {
   if (AUTH_MODE !== "supabase") {
     if (AUTH_MODE === "backend") {
-      const accessToken = cookies().get(ADMIN_ACCESS_TOKEN_COOKIE)?.value;
+      const accessToken = (await cookies()).get(ADMIN_ACCESS_TOKEN_COOKIE)?.value;
       if (!accessToken) return null;
 
       const staff = await getStaffContext(accessToken, false);
@@ -67,7 +67,7 @@ export async function getServerSession(): Promise<ServerSession | null> {
     };
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { session },
   } = await supabase.auth.getSession();

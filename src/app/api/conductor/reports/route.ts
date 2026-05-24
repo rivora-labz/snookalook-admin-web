@@ -30,7 +30,7 @@ function parseFrontmatter(text: string): Record<string, string> {
 }
 
 export async function GET() {
-  if (!isDevLocalhost()) return NextResponse.json({ error: "not found" }, { status: 404 });
+  if (!(await isDevLocalhost())) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   const dir = path.join(projectRoot(), "agents", "reports");
   let files: string[];

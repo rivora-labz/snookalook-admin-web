@@ -7,9 +7,7 @@ const withBundleAnalyzer = bundleAnalyzer({ enabled: process.env.ANALYZE === "tr
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ["@rivora-labz/snook-shared"],
-  experimental: {
-    typedRoutes: true,
-  },
+  typedRoutes: true,
   // Iter-4 §C — staged headers. Build clean. NOT promoted to prod (founder review pending).
   async headers() {
     return [

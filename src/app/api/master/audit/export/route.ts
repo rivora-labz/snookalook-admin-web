@@ -9,13 +9,13 @@ export const dynamic = "force-dynamic";
 async function resolveAuthHeader(): Promise<Record<string, string>> {
   const mode = getRuntimeAuthMode();
   if (mode === "supabase") {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.access_token) return { Authorization: `Bearer ${session.access_token}` };
     return {};
   }
   if (mode === "backend") {
-    const token = cookies().get(ADMIN_ACCESS_TOKEN_COOKIE)?.value;
+    const token = (await cookies()).get(ADMIN_ACCESS_TOKEN_COOKIE)?.value;
     return token ? { Authorization: `Bearer ${token}` } : {};
   }
   const devUser = process.env.NEXT_PUBLIC_DEV_USER_ID;

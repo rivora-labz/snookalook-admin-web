@@ -4,9 +4,9 @@ import path from "node:path";
 const ALLOWED_REMOTES = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1", "localhost"]);
 const AGENT_REGEX = /^[a-z][a-z0-9-]{0,30}$/;
 
-export function isDevLocalhost(): boolean {
+export async function isDevLocalhost(): Promise<boolean> {
   if (process.env.NODE_ENV === "production") return false;
-  const h = headers();
+  const h = await headers();
   const xff = h.get("x-forwarded-for");
   if (xff) {
     const first = xff.split(",")[0]!.trim();

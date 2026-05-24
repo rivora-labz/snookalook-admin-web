@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 const INBOX_LIMIT = 1500;
 
 export async function GET() {
-  if (!isDevLocalhost()) return NextResponse.json({ error: "not found" }, { status: 404 });
+  if (!(await isDevLocalhost())) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   const dir = path.join(projectRoot(), "agents", "inbox");
   let entries: string[];
@@ -47,7 +47,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  if (!isDevLocalhost()) return NextResponse.json({ error: "not found" }, { status: 404 });
+  if (!(await isDevLocalhost())) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   let body: { agent?: unknown; content?: unknown };
   try {
@@ -86,7 +86,7 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  if (!isDevLocalhost()) return NextResponse.json({ error: "not found" }, { status: 404 });
+  if (!(await isDevLocalhost())) return NextResponse.json({ error: "not found" }, { status: 404 });
   const url = new URL(req.url);
   const agent = url.searchParams.get("agent");
   if (!validateAgentName(agent)) {
