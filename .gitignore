@@ -5,6 +5,13 @@ node_modules
 out
 coverage
 .npmrc
+
+# Tooling caches
+.playwright-mcp/
+graphify-out/
+
+# Claude Code runtime locks
+.claude/scheduled_tasks.lock
 .env
 .env.local
 .env.*.local
