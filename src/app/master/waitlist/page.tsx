@@ -1,6 +1,7 @@
 import { masterFetchSafe } from "../../../lib/master-api";
 import { formatDate } from "../../../lib/datetime";
 
+export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
 interface WaitlistRow {

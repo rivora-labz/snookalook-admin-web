@@ -1,6 +1,16 @@
 import { Toaster } from "sonner";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import MasterNav from "./MasterNav";
 import { getServerSession } from "../../lib/auth";
+import { ADMIN_ACCESS_TOKEN_COOKIE } from "../../lib/runtime-auth";
+
+async function logoutAction() {
+  "use server";
+  const store = await cookies();
+  store.delete(ADMIN_ACCESS_TOKEN_COOKIE);
+  redirect("/login");
+}
 
 export default async function MasterShell({
   children,
@@ -24,12 +34,14 @@ export default async function MasterShell({
             <span className="font-inter text-[12px] text-th-text">
               {founderName}
             </span>
-            <a
-              href="/login"
-              className="font-inter text-[12px] text-th-text-tertiary hover:text-th-text"
-            >
-              Logout
-            </a>
+            <form action={logoutAction}>
+              <button
+                type="submit"
+                className="font-inter text-[12px] text-th-text-tertiary hover:text-th-text"
+              >
+                Logout
+              </button>
+            </form>
           </div>
         </header>
         <main className="flex-1 overflow-y-auto bg-th-bg p-8">

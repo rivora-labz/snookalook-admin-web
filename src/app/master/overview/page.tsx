@@ -3,6 +3,7 @@ import { masterFetchOrError } from "../../../lib/master-api";
 import { formatAED } from "../../../lib/currency";
 import { formatDateTime } from "../../../lib/datetime";
 
+export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
 interface Overview {
