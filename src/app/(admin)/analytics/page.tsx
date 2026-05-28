@@ -105,11 +105,13 @@ const SOURCE_COLOR: Record<string, string> = {
   WALKIN: "#808080",
 };
 
-function sourceColor(source: string): string {
+function sourceColor(source: string | null | undefined): string {
+  if (!source) return "#808080";
   return SOURCE_COLOR[source.toUpperCase()] ?? "#808080";
 }
 
-function sourceLabel(source: string): string {
+function sourceLabel(source: string | null | undefined): string {
+  if (!source) return "Unknown";
   return source.charAt(0).toUpperCase() + source.slice(1).toLowerCase();
 }
 
