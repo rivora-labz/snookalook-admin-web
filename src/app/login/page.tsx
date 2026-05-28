@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "../../lib/supabase/client";
 import { API_BASE } from "../../lib/api-base";
@@ -10,6 +10,7 @@ type Step = "phone" | "otp";
 
 const PHONE_PREFIX = "+971";
 const AUTH_MODE = getRuntimeAuthMode();
+const RESEND_COOLDOWN_SEC = 60;
 
 function LoginForm() {
   const searchParams = useSearchParams();
@@ -20,6 +21,28 @@ function LoginForm() {
   const [otp, setOtp] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [resendIn, setResendIn] = useState(0);
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (resendIn <= 0) {
+      if (tickRef.current) {
+        clearInterval(tickRef.current);
+        tickRef.current = null;
+      }
+      return;
+    }
+    if (tickRef.current) return;
+    tickRef.current = setInterval(() => {
+      setResendIn((s) => (s <= 1 ? 0 : s - 1));
+    }, 1000);
+    return () => {
+      if (tickRef.current) {
+        clearInterval(tickRef.current);
+        tickRef.current = null;
+      }
+    };
+  }, [resendIn]);
 
   const fullPhone = phone.startsWith("+") ? phone : `${PHONE_PREFIX}${phone.replace(/^0+/, "")}`;
 
@@ -47,6 +70,7 @@ function LoginForm() {
         }
       }
       setStep("otp");
+      setResendIn(RESEND_COOLDOWN_SEC);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send code.");
     } finally {
@@ -125,8 +149,8 @@ function LoginForm() {
       )}
 
       {step === "otp" && (
-        <div>
-          <p className="mb-4 text-xs text-th-text-secondary">
+        <div className="space-y-5">
+          <p className="text-xs text-th-text-secondary">
             Enter the code sent to{" "}
             <span className="text-th-text">{fullPhone}</span>
           </p>
@@ -137,22 +161,31 @@ function LoginForm() {
             value={otp}
             onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
             placeholder="1234"
-            className="w-full rounded-input border border-th-divider bg-th-bg px-3 py-2 text-center font-mono text-lg tracking-widest text-th-text outline-none focus:border-th-gold"
+            className="w-full rounded-input border border-th-divider bg-th-bg px-3 py-3 text-center font-mono text-lg tracking-widest text-th-text outline-none focus:border-th-gold"
           />
           <button
             onClick={verifyOtp}
             disabled={submitting || otp.length < 4}
-            className="mt-5 w-full rounded-button bg-th-gold px-4 py-2.5 text-sm font-medium text-black hover:bg-th-gold-hover disabled:opacity-50"
+            className="w-full rounded-button bg-th-gold px-4 py-2.5 text-sm font-medium text-black hover:bg-th-gold-hover disabled:opacity-50"
           >
             {submitting ? "Verifying..." : "Verify"}
           </button>
-          <button
-            onClick={() => { setStep("phone"); setOtp(""); setError(null); }}
-            disabled={submitting}
-            className="mt-3 w-full text-xs text-th-text-tertiary hover:text-th-text disabled:opacity-50"
-          >
-            Use a different number
-          </button>
+          <div className="flex items-center justify-between pt-1">
+            <button
+              onClick={() => { setStep("phone"); setOtp(""); setError(null); setResendIn(0); }}
+              disabled={submitting}
+              className="text-xs text-th-text-tertiary hover:text-th-text disabled:opacity-50"
+            >
+              Use a different number
+            </button>
+            <button
+              onClick={sendOtp}
+              disabled={submitting || resendIn > 0}
+              className="text-xs text-th-gold hover:text-th-gold-hover disabled:cursor-not-allowed disabled:text-th-text-tertiary"
+            >
+              {resendIn > 0 ? `Resend in ${resendIn}s` : "Resend code"}
+            </button>
+          </div>
         </div>
       )}
 
