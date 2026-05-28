@@ -3,6 +3,9 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { usePathname } from "next/navigation";
+// FOUNDER is the only role that reaches /master/* (enforced in middleware). They
+// have no center-scoped row, so a "Back to Center Admin" link would dead-end at
+// /dashboard → /forbidden. No back-link is the correct UX for god view.
 import {
   ChartLineUp,
   Buildings,
@@ -60,15 +63,6 @@ export default function MasterNav() {
           );
         })}
       </nav>
-
-      <div className="p-4 border-t border-th-card">
-        <Link
-          href={"/dashboard" as Route}
-          className="flex items-center gap-2 font-inter text-[12px] text-th-text-tertiary hover:text-th-text"
-        >
-          ← Back to Center Admin
-        </Link>
-      </div>
     </aside>
   );
 }
