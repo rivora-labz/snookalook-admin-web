@@ -95,6 +95,10 @@ export async function middleware(req: NextRequest) {
       return redirectTo(req, "/dashboard");
     }
 
+    if (!isMasterRoute && verdict.role === "FOUNDER") {
+      return redirectTo(req, "/master/overview");
+    }
+
     return NextResponse.next();
   }
 
@@ -144,6 +148,9 @@ export async function middleware(req: NextRequest) {
       if (verdict.status === "UNAUTH") return redirectTo(req, "/login", path);
       if (isMasterRoute && verdict.role !== "FOUNDER") {
         return redirectTo(req, "/dashboard");
+      }
+      if (!isMasterRoute && verdict.role === "FOUNDER") {
+        return redirectTo(req, "/master/overview");
       }
     }
   }
