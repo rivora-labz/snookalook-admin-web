@@ -5,6 +5,7 @@ import { Calendar, Clock, EnvelopeSimple, TrendUp, TrendDown } from "phosphor-re
 import BookingsCalendarView, {
   type CalBookingItem,
 } from "../../../components/BookingsCalendarView";
+import BookingsTabs from "../../../components/BookingsTabs";
 import PlayerAvatar from "../../../components/PlayerAvatar";
 import { useActiveCenterId } from "../../../lib/active-center";
 import { useAdmin } from "../../../lib/AdminContext";
@@ -149,9 +150,12 @@ export default function BookingsPage() {
     <div className="flex flex-col h-full bg-th-bg -m-8 pb-12">
       {/* Page Header */}
       <div className="px-8 pt-8 pb-6 flex items-center justify-between">
-        <h1 className="font-display text-[24px] font-semibold text-th-text">
-          Bookings
-        </h1>
+        <div className="flex items-center gap-4">
+          <h1 className="font-display text-[24px] font-semibold text-th-text">
+            Bookings
+          </h1>
+          <BookingsTabs />
+        </div>
         <div className="flex items-center gap-4">
           <button
             disabled

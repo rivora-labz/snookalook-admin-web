@@ -20,11 +20,15 @@ export default function SchedulePanel() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchSchedule() {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let isFirstLoad = true;
+
+    const fetchSchedule = async () => {
+      if (cancelled) return;
       try {
-        // In a real app, this would be a specific schedule endpoint
-        // For now, we'll fetch today's bookings and format them
         const res = await apiFetch<{ items: any[] }>("/admin/bookings?from=today&to=today");
+        if (cancelled) return;
         const formatted = res.items.slice(0, 8).map(b => ({
           time: formatTime(b.startAt),
           name: b.host.displayName,
@@ -34,12 +38,20 @@ export default function SchedulePanel() {
         }));
         setSchedule(formatted as ScheduleSlot[]);
       } catch (err) {
+        if (cancelled) return;
         console.error("Failed to fetch schedule", err);
       } finally {
-        setLoading(false);
+        if (cancelled) return;
+        if (isFirstLoad) setLoading(false);
+        isFirstLoad = false;
+        timer = setTimeout(fetchSchedule, 30_000);
       }
-    }
+    };
     fetchSchedule();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, []);
 
   if (loading) {

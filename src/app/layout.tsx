@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Toaster } from "sonner";
 import "../styles/globals.css";
 import { ThemeProvider } from "../lib/ThemeContext";
+import { RouteProgressProvider } from "../components/RouteProgressProvider";
 
 export const metadata: Metadata = {
   title: "Snook A Look — Center Admin",
@@ -21,7 +22,9 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: FOUC_SCRIPT }} />
       </head>
       <body className="min-h-screen bg-th-bg text-th-text">
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <RouteProgressProvider>{children}</RouteProgressProvider>
+        </ThemeProvider>
         <Toaster
           position="top-right"
           theme="dark"

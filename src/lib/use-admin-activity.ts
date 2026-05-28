@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "./api";
 
 export interface AdminActivityItem {
@@ -25,33 +25,66 @@ export interface UseAdminActivityResult {
   refresh: () => void;
 }
 
-export function useAdminActivity(limit = 20): UseAdminActivityResult {
+export interface UseAdminActivityOptions {
+  pollMs?: number;
+  onNewItems?: (newItems: AdminActivityItem[]) => void;
+}
+
+export function useAdminActivity(
+  limit = 20,
+  opts: UseAdminActivityOptions = {},
+): UseAdminActivityResult {
+  const { pollMs, onNewItems } = opts;
   const [items, setItems] = useState<AdminActivityItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
 
+  const seenIdsRef = useRef<Set<string>>(new Set());
+  const onNewItemsRef = useRef(onNewItems);
+  onNewItemsRef.current = onNewItems;
+
   useEffect(() => {
     let cancelled = false;
-    setIsLoading(true);
-    setError(null);
-    apiFetch<AdminActivityResponse>(`/admin/dashboard/activity?limit=${limit}`)
-      .then((res) => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let isFirstLoad = items.length === 0 && seenIdsRef.current.size === 0;
+
+    const tick = async () => {
+      if (cancelled) return;
+      if (isFirstLoad) setIsLoading(true);
+      try {
+        const res = await apiFetch<AdminActivityResponse>(
+          `/admin/dashboard/activity?limit=${limit}`,
+        );
         if (cancelled) return;
-        setItems(res.items);
-      })
-      .catch((err) => {
+        const fresh = res.items;
+        if (!isFirstLoad && onNewItemsRef.current) {
+          const seen = seenIdsRef.current;
+          const newOnes = fresh.filter((i) => !seen.has(`${i.type}:${i.bookingId}`));
+          if (newOnes.length > 0) onNewItemsRef.current(newOnes);
+        }
+        seenIdsRef.current = new Set(fresh.map((i) => `${i.type}:${i.bookingId}`));
+        setItems(fresh);
+        setError(null);
+      } catch (err) {
         if (cancelled) return;
         setError(err instanceof Error ? err : new Error(String(err)));
-      })
-      .finally(() => {
+      } finally {
         if (cancelled) return;
-        setIsLoading(false);
-      });
+        if (isFirstLoad) setIsLoading(false);
+        isFirstLoad = false;
+        if (pollMs && pollMs > 0) {
+          timer = setTimeout(tick, pollMs);
+        }
+      }
+    };
+    tick();
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
     };
-  }, [limit, reloadTick]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [limit, reloadTick, pollMs]);
 
   return { items, isLoading, error, refresh: () => setReloadTick((t) => t + 1) };
 }

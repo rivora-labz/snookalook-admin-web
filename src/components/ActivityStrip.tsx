@@ -1,6 +1,7 @@
 "use client";
 
 import { CreditCard, UserPlus, WarningCircle, Clock, XCircle } from "phosphor-react";
+import { toast } from "sonner";
 import {
   useAdminActivity,
   formatRelativeTime,
@@ -23,7 +24,25 @@ function iconFor(item: AdminActivityItem) {
 }
 
 export default function ActivityStrip() {
-  const { items, isLoading, error } = useAdminActivity(20);
+  const { items, isLoading, error } = useAdminActivity(20, {
+    pollMs: 15_000,
+    onNewItems: (newOnes) => {
+      // Surface every new dashboard activity as a toast.
+      // Cap to avoid flood on first poll after long idle.
+      const cap = Math.min(newOnes.length, 3);
+      for (let i = 0; i < cap; i++) {
+        const a = newOnes[i];
+        if (!a) continue;
+        toast(activityText(a), {
+          description: formatRelativeTime(a.createdAt),
+          duration: 5000,
+        });
+      }
+      if (newOnes.length > cap) {
+        toast.info(`+${newOnes.length - cap} more updates`, { duration: 4000 });
+      }
+    },
+  });
 
   if (error) {
     return (
