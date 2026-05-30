@@ -135,6 +135,15 @@ export async function middleware(req: NextRequest) {
   }
 
   if (user && path === "/login") {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      const verdict = await checkStaff({ Authorization: `Bearer ${session.access_token}` });
+      if (verdict.status === "OK" && verdict.role === "FOUNDER") {
+        return redirectTo(req, "/master/overview");
+      }
+    }
     return redirectTo(req, "/");
   }
 
