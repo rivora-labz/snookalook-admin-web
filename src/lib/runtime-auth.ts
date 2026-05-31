@@ -12,7 +12,15 @@ function hasSupabaseConfig() {
 export function getRuntimeAuthMode(): RuntimeAuthMode {
   const configured = process.env.NEXT_PUBLIC_AUTH_MODE;
 
-  if (configured === "dev") return "dev";
+  if (configured === "dev") {
+    if (process.env.NODE_ENV === "production") {
+      console.warn(
+        "[runtime-auth] NEXT_PUBLIC_AUTH_MODE=dev rejected in production; falling back to supabase/backend",
+      );
+      return hasSupabaseConfig() ? "supabase" : "backend";
+    }
+    return "dev";
+  }
   if (configured === "backend") return "backend";
   if (configured === "supabase") return hasSupabaseConfig() ? "supabase" : "backend";
 
