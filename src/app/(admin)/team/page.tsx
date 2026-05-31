@@ -174,9 +174,14 @@ export default function TeamPage() {
 
       {/* Add Staff Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-staff-title"
+        >
           <div className="w-full max-w-md rounded-card border border-th-divider bg-th-card p-6">
-            <h3 className="mb-4 font-display text-lg text-th-text">Add Staff Member</h3>
+            <h3 id="add-staff-title" className="mb-4 font-display text-lg text-th-text">Add Staff Member</h3>
 
             <label htmlFor="add-staff-userid" className="mb-1 block text-xs text-th-text-secondary">
               User ID
@@ -203,8 +208,9 @@ export default function TeamPage() {
             )}
             {!formError && <div className="mb-3" />}
 
-            <label className="mb-1 block text-xs text-th-text-secondary">Role</label>
+            <label htmlFor="add-staff-role" className="mb-1 block text-xs text-th-text-secondary">Role</label>
             <select
+              id="add-staff-role"
               value={formRole}
               onChange={(e) => setFormRole(e.target.value as StaffRole)}
               className="mb-6 w-full rounded-input border border-th-divider bg-th-bg px-3 py-2 text-sm text-th-text outline-none focus:border-th-gold"
