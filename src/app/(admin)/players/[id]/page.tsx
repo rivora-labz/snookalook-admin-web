@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useFocusTrap } from "../../../../lib/use-focus-trap";
 import type { Route } from "next";
 import type { BookingState, MatchMode, SkillTier } from "@rivora-labz/snook-shared";
 import type {
@@ -222,17 +223,28 @@ export default function PlayerDetailPage() {
   const [banReason, setBanReason] = useState("");
   const [banSubmitting, setBanSubmitting] = useState(false);
   const [banError, setBanError] = useState<string | null>(null);
+  const banDialogRef = useFocusTrap<HTMLDivElement>(banOpen, () => {
+    if (!banSubmitting) setBanOpen(false);
+  });
 
   // Unban dialog
   const [unbanOpen, setUnbanOpen] = useState(false);
   const [unbanSubmitting, setUnbanSubmitting] = useState(false);
   const [unbanError, setUnbanError] = useState<string | null>(null);
+  const unbanDialogRef = useFocusTrap<HTMLDivElement>(unbanOpen, () => {
+    if (!unbanSubmitting) setUnbanOpen(false);
+  });
 
   // Challenges drawer
   const [challengesDir, setChallengesDir] = useState<ChallengeDirection | null>(null);
   const [challenges, setChallenges] = useState<AdminChallengeSummary[]>([]);
   const [challengesLoading, setChallengesLoading] = useState(false);
   const [challengesError, setChallengesError] = useState<string | null>(null);
+  const challengesDrawerRef = useFocusTrap<HTMLDivElement>(challengesDir !== null, () => {
+    setChallengesDir(null);
+    setChallenges([]);
+    setChallengesError(null);
+  });
 
   // Recent bookings
   const [bookings, setBookings] = useState<AdminPlayerBookingItem[]>([]);
@@ -1046,6 +1058,7 @@ export default function PlayerDetailPage() {
           onClick={() => !banSubmitting && setBanOpen(false)}
         >
           <div
+            ref={banDialogRef}
             className="w-full max-w-md rounded-card border border-th-divider bg-th-card p-6"
             onClick={(e) => e.stopPropagation()}
           >
@@ -1107,6 +1120,7 @@ export default function PlayerDetailPage() {
           onClick={() => !unbanSubmitting && setUnbanOpen(false)}
         >
           <div
+            ref={unbanDialogRef}
             className="w-full max-w-md rounded-card border border-th-divider bg-th-card p-6"
             onClick={(e) => e.stopPropagation()}
           >
@@ -1151,6 +1165,7 @@ export default function PlayerDetailPage() {
           onClick={closeChallenges}
         >
           <div
+            ref={challengesDrawerRef}
             className="absolute right-0 top-0 h-full w-full max-w-md overflow-y-auto border-l border-th-divider bg-th-card p-6"
             onClick={(e) => e.stopPropagation()}
           >

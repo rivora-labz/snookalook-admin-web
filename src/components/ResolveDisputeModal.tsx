@@ -1,11 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { apiFetch, ApiError, formatAED } from "../lib/api";
 import { formatDateTime } from "../lib/datetime";
-
-const FOCUSABLE_SELECTOR =
-  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+import { useFocusTrap } from "../lib/use-focus-trap";
 
 export interface DisputeRecord {
   id: string;
@@ -37,9 +35,6 @@ export default function ResolveDisputeModal({ open, dispute, onClose, onResolved
   const [opponentMissing, setOpponentMissing] = useState(false);
   const [outcomeMsg, setOutcomeMsg] = useState("");
 
-  const panelRef = useRef<HTMLDivElement | null>(null);
-  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
-
   useEffect(() => {
     if (!open) return;
     setAction(null);
@@ -51,46 +46,7 @@ export default function ResolveDisputeModal({ open, dispute, onClose, onResolved
     setOutcomeMsg("");
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-    previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
-
-    const panel = panelRef.current;
-    const focusables = panel
-      ? Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
-      : [];
-    focusables[0]?.focus();
-
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-        return;
-      }
-      if (e.key !== "Tab" || !panelRef.current) return;
-      const list = Array.from(
-        panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
-      ).filter((el) => !el.hasAttribute("disabled"));
-      if (list.length === 0) return;
-      const first = list[0];
-      const last = list[list.length - 1];
-      if (!first || !last) return;
-      const active = document.activeElement as HTMLElement | null;
-      if (e.shiftKey && (active === first || !panelRef.current.contains(active))) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && active === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    };
-
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      previouslyFocusedRef.current?.focus?.();
-    };
-  }, [open, onClose]);
+  const panelRef = useFocusTrap<HTMLDivElement>(open, onClose);
 
   if (!open || !dispute) return null;
 

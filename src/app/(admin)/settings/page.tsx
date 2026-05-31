@@ -7,6 +7,7 @@ import {
 } from "phosphor-react";
 import { toast } from "sonner";
 import { apiFetch } from "../../../lib/api";
+import { useFocusTrap } from "../../../lib/use-focus-trap";
 
 const TABS = [
   { id: "profile", label: "Club Profile", icon: Buildings },
@@ -281,6 +282,10 @@ export default function SettingsPage() {
   const [inviteUserId, setInviteUserId] = useState("");
   const [inviteRole, setInviteRole] = useState<"OWNER" | "MANAGER" | "STAFF">("STAFF");
   const [inviteBusy, setInviteBusy] = useState(false);
+  const inviteTitleId = useId();
+  const inviteDialogRef = useFocusTrap<HTMLDivElement>(inviteOpen, () => {
+    if (!inviteBusy) setInviteOpen(false);
+  });
 
   const markChanged = (tab: TabId = activeTab) => {
     setDirty((prev) => {
@@ -933,10 +938,16 @@ export default function SettingsPage() {
       </div>
 
       {inviteOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70" onClick={() => !inviteBusy && setInviteOpen(false)}>
-          <div className="bg-th-card rounded-[14px] border border-[var(--th-border)] p-6 w-[420px]" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={inviteTitleId}
+          onClick={() => !inviteBusy && setInviteOpen(false)}
+        >
+          <div ref={inviteDialogRef} className="bg-th-card rounded-[14px] border border-[var(--th-border)] p-6 w-[420px]" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-display text-[16px] font-semibold text-th-text">Invite team member</h3>
+              <h3 id={inviteTitleId} className="font-display text-[16px] font-semibold text-th-text">Invite team member</h3>
               <button onClick={() => !inviteBusy && setInviteOpen(false)} className="text-th-text-tertiary hover:text-th-text"><X size={18} /></button>
             </div>
             <div className="flex flex-col gap-4">
