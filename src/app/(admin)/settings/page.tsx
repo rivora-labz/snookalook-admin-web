@@ -554,6 +554,7 @@ export default function SettingsPage() {
                             type="text"
                             pattern="[0-9]{2}:[0-9]{2}"
                             placeholder="HH:MM"
+                            aria-label={`${day} open time`}
                             maxLength={5}
                             value={dh.on ? dh.open : ""}
                             disabled={!dh.on}
@@ -568,6 +569,7 @@ export default function SettingsPage() {
                             type="text"
                             pattern="[0-9]{2}:[0-9]{2}"
                             placeholder="HH:MM"
+                            aria-label={`${day} close time`}
                             maxLength={5}
                             value={dh.on ? dh.close : ""}
                             disabled={!dh.on}
@@ -607,6 +609,7 @@ export default function SettingsPage() {
                           <span className="font-inter text-[13px] text-th-text-tertiary">AED</span>
                           <input
                             type="number"
+                            aria-label={`${label} hourly rate in AED`}
                             value={Math.round(pricing[key] / 100)}
                             onChange={(e) => {
                               const aed = Number(e.target.value) || 0;
@@ -635,6 +638,7 @@ export default function SettingsPage() {
                       <span className="font-inter text-[13px] text-th-text-tertiary">+</span>
                       <input
                         type="number"
+                        aria-label="Peak-hour surcharge percent"
                         value={pricing.peakPercent}
                         onChange={(e) => { setPricing({ ...pricing, peakPercent: Number(e.target.value) || 0 }); markChanged("pricing"); }}
                         className="bg-th-bg border border-[var(--th-border)] rounded-[10px] px-3 h-[40px] w-[70px] text-[14px] text-th-text text-right focus:outline-none focus:border-[#D4AF37]"
@@ -647,6 +651,7 @@ export default function SettingsPage() {
                         type="text"
                         pattern="[0-9]{2}:[0-9]{2}"
                         placeholder="HH:MM"
+                        aria-label="Peak-hour start time"
                         maxLength={5}
                         value={pricing.peakStart}
                         onChange={(e) => { setPricing({ ...pricing, peakStart: e.target.value }); markChanged("pricing"); }}
@@ -657,6 +662,7 @@ export default function SettingsPage() {
                         type="text"
                         pattern="[0-9]{2}:[0-9]{2}"
                         placeholder="HH:MM"
+                        aria-label="Peak-hour end time"
                         maxLength={5}
                         value={pricing.peakEnd}
                         onChange={(e) => { setPricing({ ...pricing, peakEnd: e.target.value }); markChanged("pricing"); }}
@@ -678,6 +684,7 @@ export default function SettingsPage() {
                     <span className="font-inter text-[13px] text-th-text-tertiary">-</span>
                     <input
                       type="number"
+                      aria-label="Member discount percent"
                       value={pricing.memberPercent}
                       onChange={(e) => { setPricing({ ...pricing, memberPercent: Number(e.target.value) || 0 }); markChanged("pricing"); }}
                       className="bg-th-bg border border-[var(--th-border)] rounded-[10px] px-3 h-[40px] w-[70px] text-[14px] text-th-text text-right focus:outline-none focus:border-[#D4AF37]"
@@ -720,6 +727,7 @@ export default function SettingsPage() {
                         min="0"
                         max="100"
                         step="5"
+                        aria-label="Required deposit percent"
                         value={cancellation.depositPercent}
                         onChange={(e) => { setCancellation({ ...cancellation, depositPercent: Number(e.target.value) }); markChanged("cancellation"); }}
                         className="w-full accent-[#D4AF37] bg-[var(--th-active)] h-1.5 rounded-full appearance-none cursor-pointer"
@@ -731,6 +739,7 @@ export default function SettingsPage() {
                         <span className="absolute inset-y-0 left-3 flex items-center text-th-text-tertiary text-[13px]">AED</span>
                         <input
                           type="number"
+                          aria-label="No-show fee in AED"
                           value={Math.round(cancellation.noShowFils / 100)}
                           onChange={(e) => {
                             const aed = Number(e.target.value) || 0;
