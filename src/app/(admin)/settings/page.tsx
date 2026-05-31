@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useId } from "react";
 import {
   Buildings, Clock, CurrencyCircleDollar, XCircle, UsersThree, Bank, Bell,
   Check, CheckCircle, DotsThree, X,
@@ -107,11 +107,13 @@ function InputField({
   className?: string;
   disabled?: boolean;
 }) {
+  const fieldId = useId();
   return (
     <div className={`flex flex-col gap-2 ${className}`}>
-      <label className="font-inter text-[12px] font-medium uppercase tracking-[0.04em] text-th-text-tertiary">{label}</label>
+      <label htmlFor={fieldId} className="font-inter text-[12px] font-medium uppercase tracking-[0.04em] text-th-text-tertiary">{label}</label>
       {multiline ? (
         <textarea
+          id={fieldId}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
@@ -120,6 +122,7 @@ function InputField({
         />
       ) : (
         <input
+          id={fieldId}
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
