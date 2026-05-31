@@ -8,7 +8,7 @@ const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ["@rivora-labz/snook-shared"],
   typedRoutes: true,
-  // Iter-4 §C — staged headers. Build clean. NOT promoted to prod (founder review pending).
+  // Iter-4 §C — security headers PROMOTED 2026-05-31 (founder pen D3). CSP/HSTS/clickjack live in prod.
   async headers() {
     return [
       {
