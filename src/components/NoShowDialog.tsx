@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useFocusTrap } from "../lib/use-focus-trap";
 
 export interface NoShowParticipant {
   id: string;
@@ -24,6 +25,10 @@ export default function NoShowDialog({
   const [participantId, setParticipantId] = useState(participants[0]?.id ?? "");
   const [note, setNote] = useState("");
 
+  const dialogRef = useFocusTrap<HTMLDivElement>(true, () => {
+    if (!submitting) onCancel();
+  });
+
   const selected = participants.find((p) => p.id === participantId);
   const isSolo = participants.length === 1;
   const title = isSolo
@@ -39,6 +44,7 @@ export default function NoShowDialog({
       onClick={() => !submitting && onCancel()}
     >
       <div
+        ref={dialogRef}
         className="w-full max-w-md rounded-card border border-th-divider bg-th-card p-6"
         onClick={(e) => e.stopPropagation()}
       >

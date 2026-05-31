@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useFocusTrap } from "../lib/use-focus-trap";
 import { apiFetch, ApiError } from "../lib/api";
 
 type TableTypeOpt = "SNOOKER" | "POOL" | "BILLIARDS";
@@ -28,6 +29,8 @@ export default function AddTableModal({ open, onClose, onCreated }: Props) {
     setError(null);
     setBackendGap(false);
   }, [open]);
+
+  const dialogRef = useFocusTrap<HTMLDivElement>(open, onClose);
 
   if (!open) return null;
 
@@ -76,6 +79,7 @@ export default function AddTableModal({ open, onClose, onCreated }: Props) {
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
         className="w-full max-w-md rounded-card border border-th-divider bg-th-card p-6"
         onClick={(e) => e.stopPropagation()}
       >

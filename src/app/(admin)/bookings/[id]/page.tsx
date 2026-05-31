@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useId } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useFocusTrap } from "../../../../lib/use-focus-trap";
 import type { Route } from "next";
 import type { BookingState } from "@rivora-labz/snook-shared";
 import { apiFetch, formatAED, ApiError } from "../../../../lib/api";
@@ -183,11 +184,19 @@ export default function BookingDetailPage() {
   const [forceReason, setForceReason] = useState("");
   const [forceBusy, setForceBusy] = useState(false);
   const [forceError, setForceError] = useState<string | null>(null);
+  const forceTitleId = useId();
+  const forceDialogRef = useFocusTrap<HTMLDivElement>(isForceOpen, () => {
+    if (!forceBusy) setIsForceOpen(false);
+  });
 
   const [isNoShowOpen, setIsNoShowOpen] = useState(false);
   const [noShowParticipant, setNoShowParticipant] = useState<string>("");
   const [noShowBusy, setNoShowBusy] = useState(false);
   const [noShowError, setNoShowError] = useState<string | null>(null);
+  const noShowTitleId = useId();
+  const noShowDialogRef = useFocusTrap<HTMLDivElement>(isNoShowOpen, () => {
+    if (!noShowBusy) setIsNoShowOpen(false);
+  });
 
   const [resendBusy, setResendBusy] = useState(false);
 
@@ -745,9 +754,14 @@ export default function BookingDetailPage() {
 
       {/* Force-cancel modal */}
       {isForceOpen && booking && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--th-overlay)] backdrop-blur-sm">
-          <div className="bg-th-card border border-th-divider rounded-2xl p-6 w-full max-w-[440px] shadow-[var(--th-shadow-modal)]">
-            <h3 className="font-display text-[18px] font-semibold text-th-text mb-2">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--th-overlay)] backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={forceTitleId}
+        >
+          <div ref={forceDialogRef} className="bg-th-card border border-th-divider rounded-2xl p-6 w-full max-w-[440px] shadow-[var(--th-shadow-modal)]">
+            <h3 id={forceTitleId} className="font-display text-[18px] font-semibold text-th-text mb-2">
               Force cancel booking?
             </h3>
             <p className="font-inter text-[13px] text-th-text-tertiary mb-4">
@@ -791,9 +805,14 @@ export default function BookingDetailPage() {
 
       {/* No-show modal */}
       {isNoShowOpen && booking && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--th-overlay)] backdrop-blur-sm">
-          <div className="bg-th-card border border-th-divider rounded-2xl p-6 w-full max-w-[420px] shadow-[var(--th-shadow-modal)]">
-            <h3 className="font-display text-[18px] font-semibold text-th-text mb-2">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--th-overlay)] backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={noShowTitleId}
+        >
+          <div ref={noShowDialogRef} className="bg-th-card border border-th-divider rounded-2xl p-6 w-full max-w-[420px] shadow-[var(--th-shadow-modal)]">
+            <h3 id={noShowTitleId} className="font-display text-[18px] font-semibold text-th-text mb-2">
               Mark no-show?
             </h3>
             <p className="font-inter text-[13px] text-th-text-tertiary mb-4">

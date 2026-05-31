@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useId } from "react";
 import { Calendar, Clock, EnvelopeSimple, TrendUp, TrendDown } from "phosphor-react";
+import { useFocusTrap } from "../../../lib/use-focus-trap";
 import BookingsCalendarView, {
   type CalBookingItem,
 } from "../../../components/BookingsCalendarView";
@@ -92,6 +93,13 @@ export default function BookingsPage() {
   const [isCancelling, setIsCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const cancelTitleId = useId();
+  const cancelDialogRef = useFocusTrap<HTMLDivElement>(isCancelOpen, () => {
+    if (!isCancelling) {
+      setIsCancelOpen(false);
+      setCancelError(null);
+    }
+  });
 
   const [bookingKpis, setBookingKpis] = useState<BookingKpis | null>(null);
   const [cancellationRate, setCancellationRate] = useState<CancellationRateResponse | null>(null);
@@ -374,9 +382,14 @@ export default function BookingsPage() {
 
       {/* Cancel Confirmation Modal */}
       {isCancelOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--th-overlay)] backdrop-blur-sm">
-          <div className="bg-th-card border border-th-divider rounded-2xl p-6 w-full max-w-[360px] shadow-[var(--th-shadow-modal)]">
-            <h3 className="font-display text-[18px] font-semibold text-th-text mb-2">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--th-overlay)] backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={cancelTitleId}
+        >
+          <div ref={cancelDialogRef} className="bg-th-card border border-th-divider rounded-2xl p-6 w-full max-w-[360px] shadow-[var(--th-shadow-modal)]">
+            <h3 id={cancelTitleId} className="font-display text-[18px] font-semibold text-th-text mb-2">
               Cancel this booking?
             </h3>
             <p className="font-inter text-[14px] text-th-text-tertiary mb-4">

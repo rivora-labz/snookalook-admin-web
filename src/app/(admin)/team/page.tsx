@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import type { StaffRole } from "@rivora-labz/snook-shared";
 import { toast } from "sonner";
 import { apiFetch, formatDate } from "../../../lib/api";
+import { useFocusTrap } from "../../../lib/use-focus-trap";
 
 interface StaffItem {
   id: string;
@@ -38,6 +39,9 @@ export default function TeamPage() {
   const [formUserId, setFormUserId] = useState("");
   const [formRole, setFormRole] = useState<StaffRole>("STAFF");
   const [submitting, setSubmitting] = useState(false);
+  const dialogRef = useFocusTrap<HTMLDivElement>(showModal, () => {
+    if (!submitting) setShowModal(false);
+  });
 
   const fetchTeam = useCallback(async () => {
     try {
@@ -180,7 +184,7 @@ export default function TeamPage() {
           aria-modal="true"
           aria-labelledby="add-staff-title"
         >
-          <div className="w-full max-w-md rounded-card border border-th-divider bg-th-card p-6">
+          <div ref={dialogRef} className="w-full max-w-md rounded-card border border-th-divider bg-th-card p-6">
             <h3 id="add-staff-title" className="mb-4 font-display text-lg text-th-text">Add Staff Member</h3>
 
             <label htmlFor="add-staff-userid" className="mb-1 block text-xs text-th-text-secondary">
