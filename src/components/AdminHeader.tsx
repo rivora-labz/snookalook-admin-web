@@ -172,6 +172,7 @@ export default function AdminHeader() {
         {/* Theme Toggle */}
         <button
           onClick={toggleTheme}
+          aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
           className="relative p-2 text-th-text-tertiary hover:text-th-text transition-colors"
           title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
         >
@@ -181,6 +182,7 @@ export default function AdminHeader() {
         {/* Activity Bell */}
         <button
           onClick={() => setIsActivityOpen(true)}
+          aria-label="Open activity feed"
           className="relative p-2 text-th-text-tertiary hover:text-th-text transition-colors"
         >
           <Bell size={20} />

@@ -56,8 +56,9 @@ export default function Drawer({
       >
         <div className="flex items-center justify-between p-6 border-b border-th-divider">
           <h2 id={titleId} className="font-display text-[20px] font-bold text-th-text">{title}</h2>
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
+            aria-label={`Close ${title}`}
             className="p-2 text-th-text-tertiary hover:text-th-text hover:bg-th-hover rounded-full transition-all"
           >
             <X size={24} weight="bold" />
