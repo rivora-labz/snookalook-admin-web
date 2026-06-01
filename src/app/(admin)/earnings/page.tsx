@@ -381,6 +381,7 @@ export default function EarningsPage() {
               <input
                 type="text"
                 placeholder="Search transactions..."
+                aria-label="Search transactions"
                 value={search}
                 onChange={(e) => {
                   setSearch(e.target.value);

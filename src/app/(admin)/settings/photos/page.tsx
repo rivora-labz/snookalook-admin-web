@@ -133,6 +133,7 @@ function SortablePhotoCard({
             {editing ? (
               <input
                 ref={inputRef}
+                aria-label="Photo caption"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onBlur={commit}

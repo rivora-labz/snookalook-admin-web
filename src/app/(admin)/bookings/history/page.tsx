@@ -242,6 +242,7 @@ export default function BookingsHistoryPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search player, phone, table…"
+            aria-label="Search bookings history"
             className="w-full h-[40px] pl-10 pr-4 bg-th-card border border-th-border rounded-lg text-[13px] text-th-text placeholder:text-th-text-tertiary focus:outline-none focus:border-[#D4AF37]/50"
           />
         </div>

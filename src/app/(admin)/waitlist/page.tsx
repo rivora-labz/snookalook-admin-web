@@ -192,6 +192,7 @@ export default function WaitlistPage() {
         <input
           type="text"
           placeholder="Filter by email…"
+          aria-label="Filter waitlist by email"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full max-w-sm rounded-input border border-th-divider bg-th-card px-4 py-2 text-sm text-th-text placeholder-th-text-tertiary outline-none focus:border-th-gold"

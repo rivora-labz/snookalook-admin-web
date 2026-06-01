@@ -133,6 +133,7 @@ export default function PlayersPage() {
             <input
               type="text"
               placeholder="Search players..."
+              aria-label="Search players"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full bg-th-elevated border border-[var(--th-border-medium)] rounded-lg pl-10 pr-4 py-2 text-[14px] text-th-text placeholder:text-th-text-tertiary focus:outline-none focus:border-[#D4AF37]"

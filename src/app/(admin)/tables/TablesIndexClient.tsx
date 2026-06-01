@@ -171,10 +171,10 @@ export default function TablesIndexClient() {
             Sort
           </button>
           <div className="flex bg-th-card rounded-md border border-th-divider p-1 gap-1">
-            <button className="p-1.5 rounded bg-th-divider text-th-text shadow-sm">
+            <button aria-label="Grid view" className="p-1.5 rounded bg-th-divider text-th-text shadow-sm">
               <GridFour size={16} />
             </button>
-            <button className="p-1.5 rounded text-th-text-tertiary hover:text-th-text transition-colors">
+            <button aria-label="List view" className="p-1.5 rounded text-th-text-tertiary hover:text-th-text transition-colors">
               <List size={16} />
             </button>
           </div>
@@ -273,18 +273,21 @@ export default function TablesIndexClient() {
                         })
                       }
                       title="Edit"
+                      aria-label="Edit table"
                       className="w-8 h-8 rounded-full bg-th-divider hover:bg-[var(--th-hover)] text-th-text flex items-center justify-center transition-colors"
                     >
                       <PencilSimple size={16} />
                     </button>
                     <button
                       title="Block"
+                      aria-label="Block table"
                       className="w-8 h-8 rounded-full bg-th-divider hover:bg-[var(--th-hover)] text-th-text flex items-center justify-center transition-colors"
                     >
                       <CalendarX size={16} />
                     </button>
                     <button
                       title="History"
+                      aria-label="Table history"
                       className="w-8 h-8 rounded-full bg-th-divider hover:bg-[var(--th-hover)] text-th-text flex items-center justify-center transition-colors"
                     >
                       <ClockCounterClockwise size={16} />
