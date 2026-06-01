@@ -38,7 +38,9 @@ export function getSupabaseConfig() {
   return { url, anonKey };
 }
 
-// WEB.6 — client-side cookie write/read/clear REMOVED. Cookie is now HttpOnly and
-// can only be set/read server-side. See src/app/actions/admin-token.ts for the
-// replacement server actions: setAdminAccessTokenCookie, clearAdminAccessTokenCookie,
-// getAdminAccessToken. All call sites updated to await the server actions.
+// WEB.6.A — client-side cookie write/read/clear REMOVED. Cookie is HttpOnly,
+// never reachable from JS. See src/app/actions/admin-token.ts for the only
+// boundary crossings: `loginWithOtp` (verify + set in one action, no
+// token-as-param) and `clearAdminAccessTokenCookie` (logout). Server-side
+// readers (middleware, /api/proxy, audit/export route) reach the cookie via
+// next/headers directly. No server action returns the JWT to JS.

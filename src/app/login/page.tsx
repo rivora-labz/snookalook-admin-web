@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "../../lib/supabase/client";
 import { API_BASE } from "../../lib/api-base";
 import { getRuntimeAuthMode } from "../../lib/runtime-auth";
-import { setAdminAccessTokenCookie } from "../actions/admin-token";
+import { loginWithOtp } from "../actions/admin-token";
 
 type Step = "phone" | "otp";
 
@@ -13,9 +13,18 @@ const PHONE_PREFIX = "+971";
 const AUTH_MODE = getRuntimeAuthMode();
 const RESEND_COOLDOWN_SEC = 60;
 
+// WEB.6.A out-of-scope follow-up: clamp `?next=` to same-origin paths so a
+// leaked redirect can't pair with any future token leak.
+function safeNext(raw: string | null): string {
+  if (!raw) return "/";
+  if (!raw.startsWith("/")) return "/";
+  if (raw.startsWith("//")) return "/";
+  return raw;
+}
+
 function LoginForm() {
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? "/";
+  const next = safeNext(searchParams.get("next"));
 
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
@@ -96,16 +105,10 @@ function LoginForm() {
         });
         if (sbError) throw sbError;
       } else {
-        const res = await fetch(`${API_BASE}/auth/verify-otp`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ phone: fullPhone, otp }),
-        });
-        const body = await res.json().catch(() => null);
-        if (!res.ok || !body?.accessToken) {
-          throw new Error(body?.message ?? "Incorrect or expired code.");
+        const result = await loginWithOtp(fullPhone, otp);
+        if (!result.ok) {
+          throw new Error(result.message);
         }
-        await setAdminAccessTokenCookie(body.accessToken);
       }
       window.location.href = next;
     } catch (err) {
