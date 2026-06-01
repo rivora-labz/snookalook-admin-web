@@ -8,6 +8,13 @@ const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ["@rivora-labz/snook-shared"],
   typedRoutes: true,
+  // T-NEW WEB §3 WEB.2 — stable Server Action encryption key across deploys. Without
+  // this, Next.js auto-generates a per-build key, so action IDs (= hash of action body
+  // + key) churn on every deploy; clients with cached chunks then hit UnrecognizedActionError.
+  // Pair with Vercel skewProtection (vercel.json). Rotate only on key compromise.
+  ...(process.env.SERVER_ACTIONS_ENCRYPTION_KEY
+    ? { experimental: { serverActions: { encryptionKey: process.env.SERVER_ACTIONS_ENCRYPTION_KEY } } }
+    : {}),
   // Iter-4 §C — security headers PROMOTED 2026-05-31 (founder pen D3). CSP/HSTS/clickjack live in prod.
   async headers() {
     return [
