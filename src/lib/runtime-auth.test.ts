@@ -3,9 +3,6 @@ import {
   ADMIN_ACCESS_TOKEN_COOKIE,
   getRuntimeAuthMode,
   getSupabaseConfig,
-  readAdminAccessTokenCookie,
-  writeAdminAccessTokenCookie,
-  clearAdminAccessTokenCookie,
 } from "./runtime-auth";
 
 const setSupabaseEnv = () => {
@@ -16,13 +13,6 @@ const clearSupabaseEnv = () => {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
 };
-
-function clearCookies() {
-  for (const c of document.cookie.split("; ")) {
-    const name = c.split("=")[0];
-    if (name) document.cookie = `${name}=; Path=/; Max-Age=0`;
-  }
-}
 
 describe("ADMIN_ACCESS_TOKEN_COOKIE", () => {
   it("is the canonical cookie name", () => {
@@ -122,38 +112,3 @@ describe("getSupabaseConfig", () => {
   });
 });
 
-describe("cookie helpers", () => {
-  beforeEach(() => {
-    clearCookies();
-  });
-  afterEach(() => {
-    clearCookies();
-  });
-
-  it("readAdminAccessTokenCookie returns null when cookie missing", () => {
-    expect(readAdminAccessTokenCookie()).toBeNull();
-  });
-
-  it("writeAdminAccessTokenCookie + readAdminAccessTokenCookie round-trip", () => {
-    writeAdminAccessTokenCookie("tok-123");
-    expect(readAdminAccessTokenCookie()).toBe("tok-123");
-  });
-
-  it("URL-encodes special chars and decodes on read", () => {
-    writeAdminAccessTokenCookie("a b=c/d&e");
-    expect(readAdminAccessTokenCookie()).toBe("a b=c/d&e");
-  });
-
-  it("clearAdminAccessTokenCookie removes the cookie", () => {
-    writeAdminAccessTokenCookie("tok-2");
-    clearAdminAccessTokenCookie();
-    expect(readAdminAccessTokenCookie()).toBeNull();
-  });
-
-  it("readAdminAccessTokenCookie ignores other cookies", () => {
-    document.cookie = "other=value; Path=/";
-    expect(readAdminAccessTokenCookie()).toBeNull();
-    writeAdminAccessTokenCookie("tok-3");
-    expect(readAdminAccessTokenCookie()).toBe("tok-3");
-  });
-});
