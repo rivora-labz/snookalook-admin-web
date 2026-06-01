@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
   if (!res.ok) {
     return NextResponse.json(
       { error: "audit_export_failed", status: res.status },
-      { status: res.status },
+      { status: res.status, headers: { "Cache-Control": "no-store, private" } },
     );
   }
   const body = await res.text();
@@ -41,6 +41,9 @@ export async function GET(req: NextRequest) {
       "content-disposition":
         res.headers.get("content-disposition") ??
         `attachment; filename="audit-${new Date().toISOString().slice(0, 10)}.csv"`,
+      // Burst-10 AL.2 — user-specific CSV export. `private` blocks shared CDN cache
+      // (prevents cross-user data leak via edge cache); `no-store` blocks all cache layers.
+      "Cache-Control": "no-store, private",
     },
   });
 }
