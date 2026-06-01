@@ -30,9 +30,28 @@ describe("Button", () => {
     expect(screen.getByRole("button").className).toContain("bg-th-gold");
   });
 
+  it("secondary variant has card bg + border", () => {
+    const { container } = render(<Button variant="secondary">X</Button>);
+    const cls = container.querySelector("button")!.className;
+    expect(cls).toContain("bg-th-card");
+    expect(cls).toContain("border");
+  });
+
+  it("ghost variant has hover-only styling (no solid bg)", () => {
+    const { container } = render(<Button variant="ghost">X</Button>);
+    const cls = container.querySelector("button")!.className;
+    expect(cls).toContain("hover:bg-th-hover");
+    expect(cls).not.toContain("bg-th-gold");
+  });
+
   it("applies danger variant class", () => {
     render(<Button variant="danger">Delete</Button>);
     expect(screen.getByRole("button").className).toContain("bg-[#E74C3C]");
+  });
+
+  it("defaults to md size (h-9)", () => {
+    const { container } = render(<Button>X</Button>);
+    expect(container.querySelector("button")!.className).toContain("h-9");
   });
 
   it("applies size class (sm/md/lg)", () => {
@@ -40,6 +59,16 @@ describe("Button", () => {
     expect(screen.getByRole("button").className).toContain("h-8");
     rerender(<Button size="lg">L</Button>);
     expect(screen.getByRole("button").className).toContain("h-11");
+  });
+
+  it("passes extra className through", () => {
+    const { container } = render(<Button className="my-extra">X</Button>);
+    expect(container.querySelector("button")!.className).toContain("my-extra");
+  });
+
+  it("disabled prop applies to button element", () => {
+    const { container } = render(<Button disabled>X</Button>);
+    expect((container.querySelector("button") as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("forwards arbitrary props (aria-label, type)", () => {
