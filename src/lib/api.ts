@@ -1,11 +1,18 @@
 import { createClient } from "./supabase/client";
 import { API_BASE } from "./api-base";
-import { getRuntimeAuthMode, readAdminAccessTokenCookie } from "./runtime-auth";
+import { getRuntimeAuthMode } from "./runtime-auth";
 
 // Dev-only fallback: backend (NODE_ENV !== "production") accepts
 // `X-Dev-User: <userId>` instead of a real Supabase JWT. Set
 // NEXT_PUBLIC_DEV_USER_ID in .env.local to the seeded OWNER user uuid.
 const DEV_USER_ID = process.env.NEXT_PUBLIC_DEV_USER_ID ?? "";
+
+// WEB.6.A P0 — In backend mode the JWT lives in an HttpOnly cookie and must
+// never cross the JS trust boundary. Requests are routed through the in-app
+// proxy at /api/proxy/[...path], which reads the cookie server-side and
+// attaches the Bearer header upstream. The browser sends the cookie to the
+// same-origin proxy automatically; no JS code reads or holds the token.
+const BACKEND_PROXY_PREFIX = "/api/proxy";
 
 export class MisconfiguredAuth extends Error {
   constructor(message = "Auth misconfigured: dev mode requires NEXT_PUBLIC_DEV_USER_ID.") {
@@ -14,34 +21,56 @@ export class MisconfiguredAuth extends Error {
   }
 }
 
-async function getAuthHeader(): Promise<Record<string, string>> {
+interface ResolvedRequest {
+  url: string;
+  authHeader: Record<string, string>;
+}
+
+function joinProxy(path: string): string {
+  return path.startsWith("/")
+    ? `${BACKEND_PROXY_PREFIX}${path}`
+    : `${BACKEND_PROXY_PREFIX}/${path}`;
+}
+
+async function resolveRequest(path: string): Promise<ResolvedRequest> {
   const authMode = getRuntimeAuthMode();
 
   if (authMode === "supabase") {
-    if (typeof window === "undefined") return {};
-    const supabase = createClient();
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      return { Authorization: `Bearer ${session.access_token}` };
+    let authHeader: Record<string, string> = {};
+    if (typeof window !== "undefined") {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        authHeader = { Authorization: `Bearer ${session.access_token}` };
+      }
     }
-    return {};
+    return { url: `${API_BASE}${path}`, authHeader };
   }
 
   if (authMode === "backend") {
-    const accessToken = readAdminAccessTokenCookie();
-    return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+    return { url: joinProxy(path), authHeader: {} };
   }
 
   if (DEV_USER_ID) {
-    return { "X-Dev-User": DEV_USER_ID };
+    return {
+      url: `${API_BASE}${path}`,
+      authHeader: { "X-Dev-User": DEV_USER_ID },
+    };
   }
   throw new MisconfiguredAuth();
 }
 
-export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const authHeader = await getAuthHeader();
+function handleAuthFailure(status: number): void {
+  if (status === 401 && getRuntimeAuthMode() !== "dev" && typeof window !== "undefined") {
+    window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
+    throw new ApiError(401, "UNAUTHORIZED", "Session expired.");
+  }
+}
 
-  const res = await fetch(`${API_BASE}${path}`, {
+export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const { url, authHeader } = await resolveRequest(path);
+
+  const res = await fetch(url, {
     ...init,
     headers: {
       "Content-Type": "application/json",
@@ -50,10 +79,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     },
   });
 
-  if (res.status === 401 && getRuntimeAuthMode() !== "dev" && typeof window !== "undefined") {
-    window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
-    throw new ApiError(401, "UNAUTHORIZED", "Session expired.");
-  }
+  handleAuthFailure(res.status);
 
   if (!res.ok) {
     const body = await res.json().catch(() => null);
@@ -92,14 +118,9 @@ export async function apiFetchRetry<T>(
 }
 
 export async function apiFetchBlob(path: string): Promise<Blob> {
-  const authHeader = await getAuthHeader();
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { ...authHeader },
-  });
-  if (res.status === 401 && getRuntimeAuthMode() !== "dev" && typeof window !== "undefined") {
-    window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
-    throw new ApiError(401, "UNAUTHORIZED", "Session expired.");
-  }
+  const { url, authHeader } = await resolveRequest(path);
+  const res = await fetch(url, { headers: { ...authHeader } });
+  handleAuthFailure(res.status);
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     throw new ApiError(res.status, body?.code ?? "UNKNOWN", body?.message ?? res.statusText);
@@ -108,18 +129,15 @@ export async function apiFetchBlob(path: string): Promise<Blob> {
 }
 
 export async function apiFetchFormData<T>(path: string, body: FormData): Promise<T> {
-  const authHeader = await getAuthHeader();
+  const { url, authHeader } = await resolveRequest(path);
 
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(url, {
     method: "POST",
     headers: { ...authHeader },
     body,
   });
 
-  if (res.status === 401 && getRuntimeAuthMode() !== "dev" && typeof window !== "undefined") {
-    window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
-    throw new ApiError(401, "UNAUTHORIZED", "Session expired.");
-  }
+  handleAuthFailure(res.status);
 
   if (!res.ok) {
     const errBody = await res.json().catch(() => null);

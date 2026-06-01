@@ -4,7 +4,8 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "../lib/supabase/client";
-import { clearAdminAccessTokenCookie, getRuntimeAuthMode } from "../lib/runtime-auth";
+import { getRuntimeAuthMode } from "../lib/runtime-auth";
+import { clearAdminAccessTokenCookie } from "../app/actions/admin-token";
 import { useStaffSession } from "../lib/use-staff-session";
 import {
   SquaresFour,
@@ -143,8 +144,8 @@ export default function AdminNav() {
           </button>
         ) : (
           <button
-            onClick={() => {
-              clearAdminAccessTokenCookie();
+            onClick={async () => {
+              await clearAdminAccessTokenCookie();
               window.location.href = "/login";
             }}
             className="text-th-text-tertiary hover:text-th-text transition-colors"

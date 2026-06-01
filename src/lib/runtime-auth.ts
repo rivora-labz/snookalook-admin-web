@@ -38,27 +38,9 @@ export function getSupabaseConfig() {
   return { url, anonKey };
 }
 
-export function readAdminAccessTokenCookie() {
-  if (typeof document === "undefined") return null;
-
-  const prefix = `${ADMIN_ACCESS_TOKEN_COOKIE}=`;
-  const match = document.cookie
-    .split("; ")
-    .find((part) => part.startsWith(prefix));
-
-  return match ? decodeURIComponent(match.slice(prefix.length)) : null;
-}
-
-export function writeAdminAccessTokenCookie(token: string) {
-  if (typeof document === "undefined") return;
-  const secure = window.location.protocol === "https:" ? "; Secure" : "";
-  document.cookie =
-    `${ADMIN_ACCESS_TOKEN_COOKIE}=${encodeURIComponent(token)}; Path=/; Max-Age=3600; SameSite=Lax${secure}`;
-}
-
-export function clearAdminAccessTokenCookie() {
-  if (typeof document === "undefined") return;
-  const secure = window.location.protocol === "https:" ? "; Secure" : "";
-  document.cookie =
-    `${ADMIN_ACCESS_TOKEN_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax${secure}`;
-}
+// WEB.6.A — client-side cookie write/read/clear REMOVED. Cookie is HttpOnly,
+// never reachable from JS. See src/app/actions/admin-token.ts for the only
+// boundary crossings: `loginWithOtp` (verify + set in one action, no
+// token-as-param) and `clearAdminAccessTokenCookie` (logout). Server-side
+// readers (middleware, /api/proxy, audit/export route) reach the cookie via
+// next/headers directly. No server action returns the JWT to JS.
