@@ -69,17 +69,10 @@ describe("apiFetch auth-header branches", () => {
     expect(lastFetchHeaders().Authorization).toBeUndefined();
   });
 
-  it("backend mode + cookie token → Authorization: Bearer <cookie>", async () => {
+  it("backend mode → routes through /api/proxy with no client Authorization (WEB.6.A)", async () => {
     getRuntimeAuthModeMock.mockReturnValue("backend");
-    readAdminAccessTokenCookieMock.mockReturnValue("ck-tok");
     await apiFetch("/x");
-    expect(lastFetchHeaders()).toMatchObject({ Authorization: "Bearer ck-tok" });
-  });
-
-  it("backend mode + no cookie → no Authorization", async () => {
-    getRuntimeAuthModeMock.mockReturnValue("backend");
-    readAdminAccessTokenCookieMock.mockReturnValue(null);
-    await apiFetch("/x");
+    expect(lastFetchCall()[0]).toBe("/api/proxy/x");
     expect(lastFetchHeaders().Authorization).toBeUndefined();
   });
 
