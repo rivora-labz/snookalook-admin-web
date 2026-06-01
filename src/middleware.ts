@@ -46,8 +46,19 @@ function redirectTo(req: NextRequest, pathname: string, withNext?: string) {
 }
 
 export async function middleware(req: NextRequest) {
-  const authMode = getRuntimeAuthMode();
   const path = req.nextUrl.pathname;
+
+  // Burst-10 AL.1 — defensive Cache-Control default for /api/* routes.
+  // Mirrors backend Burst-9 global onSend hook intent (defensive global default;
+  // per-route handlers may override with stricter directives like `private, no-store`).
+  // /api/* routes own their auth (resolveAuthHeader pattern) — bypass page-redirect logic.
+  if (path.startsWith("/api/")) {
+    const res = NextResponse.next();
+    res.headers.set("Cache-Control", "no-store");
+    return res;
+  }
+
+  const authMode = getRuntimeAuthMode();
   const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
   const isMasterRoute = path === "/master" || path.startsWith("/master/");
 
