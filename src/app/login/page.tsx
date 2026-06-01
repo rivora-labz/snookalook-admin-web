@@ -4,7 +4,8 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "../../lib/supabase/client";
 import { API_BASE } from "../../lib/api-base";
-import { getRuntimeAuthMode, writeAdminAccessTokenCookie } from "../../lib/runtime-auth";
+import { getRuntimeAuthMode } from "../../lib/runtime-auth";
+import { setAdminAccessTokenCookie } from "../actions/admin-token";
 
 type Step = "phone" | "otp";
 
@@ -104,7 +105,7 @@ function LoginForm() {
         if (!res.ok || !body?.accessToken) {
           throw new Error(body?.message ?? "Incorrect or expired code.");
         }
-        writeAdminAccessTokenCookie(body.accessToken);
+        await setAdminAccessTokenCookie(body.accessToken);
       }
       window.location.href = next;
     } catch (err) {

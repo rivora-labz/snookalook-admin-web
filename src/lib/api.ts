@@ -1,6 +1,7 @@
 import { createClient } from "./supabase/client";
 import { API_BASE } from "./api-base";
-import { getRuntimeAuthMode, readAdminAccessTokenCookie } from "./runtime-auth";
+import { getRuntimeAuthMode } from "./runtime-auth";
+import { getAdminAccessToken } from "../app/actions/admin-token";
 
 // Dev-only fallback: backend (NODE_ENV !== "production") accepts
 // `X-Dev-User: <userId>` instead of a real Supabase JWT. Set
@@ -28,7 +29,7 @@ async function getAuthHeader(): Promise<Record<string, string>> {
   }
 
   if (authMode === "backend") {
-    const accessToken = readAdminAccessTokenCookie();
+    const accessToken = await getAdminAccessToken();
     return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
   }
 

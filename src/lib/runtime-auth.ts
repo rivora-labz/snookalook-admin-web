@@ -38,27 +38,7 @@ export function getSupabaseConfig() {
   return { url, anonKey };
 }
 
-export function readAdminAccessTokenCookie() {
-  if (typeof document === "undefined") return null;
-
-  const prefix = `${ADMIN_ACCESS_TOKEN_COOKIE}=`;
-  const match = document.cookie
-    .split("; ")
-    .find((part) => part.startsWith(prefix));
-
-  return match ? decodeURIComponent(match.slice(prefix.length)) : null;
-}
-
-export function writeAdminAccessTokenCookie(token: string) {
-  if (typeof document === "undefined") return;
-  const secure = window.location.protocol === "https:" ? "; Secure" : "";
-  document.cookie =
-    `${ADMIN_ACCESS_TOKEN_COOKIE}=${encodeURIComponent(token)}; Path=/; Max-Age=3600; SameSite=Lax${secure}`;
-}
-
-export function clearAdminAccessTokenCookie() {
-  if (typeof document === "undefined") return;
-  const secure = window.location.protocol === "https:" ? "; Secure" : "";
-  document.cookie =
-    `${ADMIN_ACCESS_TOKEN_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax${secure}`;
-}
+// WEB.6 — client-side cookie write/read/clear REMOVED. Cookie is now HttpOnly and
+// can only be set/read server-side. See src/app/actions/admin-token.ts for the
+// replacement server actions: setAdminAccessTokenCookie, clearAdminAccessTokenCookie,
+// getAdminAccessToken. All call sites updated to await the server actions.
