@@ -15,16 +15,21 @@ interface FakeSocket {
   emit: ReturnType<typeof vi.fn>;
   on: ReturnType<typeof vi.fn>;
   off: ReturnType<typeof vi.fn>;
-  _handler?: AnyFn;
+  _handlers: Map<string, AnyFn>;
+  _trigger: (evt: string, payload: unknown) => void;
 }
 
 function makeSocket(): FakeSocket {
   const s: FakeSocket = {
     emit: vi.fn(),
-    on: vi.fn((_evt: string, h: AnyFn) => {
-      s._handler = h;
+    on: vi.fn((evt: string, h: AnyFn) => {
+      s._handlers.set(evt, h);
     }),
     off: vi.fn(),
+    _handlers: new Map(),
+    _trigger: (evt: string, payload: unknown) => {
+      s._handlers.get(evt)?.(payload);
+    },
   };
   return s;
 }
@@ -50,13 +55,15 @@ describe("useRealtimeTables", () => {
     await waitFor(() => expect(connectSocketMock).toHaveBeenCalledTimes(1));
   });
 
-  it("joins admin room and registers handler after connect", async () => {
+  it("joins admin room and registers handlers for all three table events", async () => {
     const socket = makeSocket();
     connectSocketMock.mockResolvedValue(socket);
     const onInvalidate = vi.fn();
     renderHook(() => useRealtimeTables("c-2", onInvalidate));
     await waitFor(() => expect(socket.emit).toHaveBeenCalledWith("join:admin", "c-2"));
     expect(socket.on).toHaveBeenCalledWith("table.updated", expect.any(Function));
+    expect(socket.on).toHaveBeenCalledWith("table.created", expect.any(Function));
+    expect(socket.on).toHaveBeenCalledWith("table.deleted", expect.any(Function));
   });
 
   it("invokes onInvalidate when table.updated event matches centerId", async () => {
@@ -64,12 +71,28 @@ describe("useRealtimeTables", () => {
     connectSocketMock.mockResolvedValue(socket);
     const onInvalidate = vi.fn();
     renderHook(() => useRealtimeTables("c-3", onInvalidate));
-    await waitFor(() => expect(socket._handler).toBeTypeOf("function"));
-    socket._handler!({
-      type: "table.updated",
-      centerId: "c-3",
-      table: { id: "t1", centerId: "c-3", status: "available" },
-    });
+    await waitFor(() => expect(socket._handlers.has("table.updated")).toBe(true));
+    socket._trigger("table.updated", { centerId: "c-3", table: { id: "t1", centerId: "c-3", status: "available" } });
+    expect(onInvalidate).toHaveBeenCalledTimes(1);
+  });
+
+  it("invokes onInvalidate when table.created event matches centerId", async () => {
+    const socket = makeSocket();
+    connectSocketMock.mockResolvedValue(socket);
+    const onInvalidate = vi.fn();
+    renderHook(() => useRealtimeTables("c-3b", onInvalidate));
+    await waitFor(() => expect(socket._handlers.has("table.created")).toBe(true));
+    socket._trigger("table.created", { centerId: "c-3b", table: { id: "t2", centerId: "c-3b", status: "available" } });
+    expect(onInvalidate).toHaveBeenCalledTimes(1);
+  });
+
+  it("invokes onInvalidate when table.deleted event matches centerId", async () => {
+    const socket = makeSocket();
+    connectSocketMock.mockResolvedValue(socket);
+    const onInvalidate = vi.fn();
+    renderHook(() => useRealtimeTables("c-3c", onInvalidate));
+    await waitFor(() => expect(socket._handlers.has("table.deleted")).toBe(true));
+    socket._trigger("table.deleted", { centerId: "c-3c", tableId: "t3" });
     expect(onInvalidate).toHaveBeenCalledTimes(1);
   });
 
@@ -78,16 +101,12 @@ describe("useRealtimeTables", () => {
     connectSocketMock.mockResolvedValue(socket);
     const onInvalidate = vi.fn();
     renderHook(() => useRealtimeTables("c-4", onInvalidate));
-    await waitFor(() => expect(socket._handler).toBeTypeOf("function"));
-    socket._handler!({
-      type: "table.updated",
-      centerId: "other-center",
-      table: { id: "t1", centerId: "other-center", status: "available" },
-    });
+    await waitFor(() => expect(socket._handlers.has("table.updated")).toBe(true));
+    socket._trigger("table.updated", { centerId: "other-center", table: { id: "t1", centerId: "other-center", status: "available" } });
     expect(onInvalidate).not.toHaveBeenCalled();
   });
 
-  it("cleanup unregisters handler and emits leave:center on unmount", async () => {
+  it("cleanup unregisters all three handlers and emits leave:center on unmount", async () => {
     const socket = makeSocket();
     connectSocketMock.mockResolvedValue(socket);
     const onInvalidate = vi.fn();
@@ -95,6 +114,8 @@ describe("useRealtimeTables", () => {
     await waitFor(() => expect(socket.emit).toHaveBeenCalledWith("join:admin", "c-5"));
     unmount();
     expect(socket.off).toHaveBeenCalledWith("table.updated", expect.any(Function));
+    expect(socket.off).toHaveBeenCalledWith("table.created", expect.any(Function));
+    expect(socket.off).toHaveBeenCalledWith("table.deleted", expect.any(Function));
     expect(socket.emit).toHaveBeenCalledWith("leave:center", "c-5");
   });
 
@@ -132,6 +153,8 @@ describe("useRealtimeTables", () => {
     rerender({ id: "c-B" });
     await waitFor(() => expect(socketB.emit).toHaveBeenCalledWith("join:admin", "c-B"));
     expect(socketA.off).toHaveBeenCalledWith("table.updated", expect.any(Function));
+    expect(socketA.off).toHaveBeenCalledWith("table.created", expect.any(Function));
+    expect(socketA.off).toHaveBeenCalledWith("table.deleted", expect.any(Function));
     expect(socketA.emit).toHaveBeenCalledWith("leave:center", "c-A");
   });
 
@@ -155,12 +178,8 @@ describe("useRealtimeTables", () => {
     connectSocketMock.mockResolvedValue(socket);
     const onInvalidate = vi.fn();
     renderHook(() => useRealtimeTables("c-9", onInvalidate));
-    await waitFor(() => expect(socket._handler).toBeTypeOf("function"));
-    socket._handler!({
-      type: "table.updated",
-      centerId: undefined as unknown as string,
-      table: { id: "t1", centerId: "x", status: "available" },
-    });
+    await waitFor(() => expect(socket._handlers.has("table.updated")).toBe(true));
+    socket._trigger("table.updated", { centerId: undefined, table: { id: "t1", centerId: "x", status: "available" } });
     expect(onInvalidate).not.toHaveBeenCalled();
   });
 });
