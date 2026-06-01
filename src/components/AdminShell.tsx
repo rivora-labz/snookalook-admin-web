@@ -239,6 +239,7 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
           </h2>
           <button
             onClick={() => setIsBookingOpen(false)}
+            aria-label="Close new booking drawer"
             className="text-th-text-tertiary hover:text-th-text"
           >
             <X size={24} />
@@ -518,6 +519,7 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
             </button>
             <button
               onClick={() => setIsActivityOpen(false)}
+              aria-label="Close activity drawer"
               className="text-th-text-tertiary hover:text-th-text"
             >
               <X size={20} />
