@@ -1,0 +1,251 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import React from "react";
+import { render, screen, waitFor, fireEvent, cleanup } from "@testing-library/react";
+
+// ---------------------------------------------------------------------------
+// Hoisted mocks
+// ---------------------------------------------------------------------------
+
+const apiFetchMock = vi.hoisted(() => vi.fn());
+
+vi.mock("../../../lib/api", () => ({
+  apiFetch: apiFetchMock,
+  formatAED: (fils: number) => `AED ${(fils / 100).toFixed(2)}`,
+}));
+
+vi.mock("../../../lib/datetime", () => ({
+  formatTime: (s: string) => `t:${s}`,
+}));
+
+vi.mock("../../../components/AddTableModal", () => ({
+  default: ({ open, onClose }: { open: boolean; onClose: () => void }) =>
+    open ? (
+      <div data-testid="add-modal">
+        <button onClick={onClose}>close-add</button>
+      </div>
+    ) : null,
+}));
+
+vi.mock("../../../components/EditTableModal", () => ({
+  default: ({
+    open,
+    onClose,
+  }: {
+    open: boolean;
+    onClose: () => void;
+    table: unknown;
+    onSaved: () => void;
+  }) =>
+    open ? (
+      <div data-testid="edit-modal">
+        <button onClick={onClose}>close-edit</button>
+      </div>
+    ) : null,
+}));
+
+vi.mock("../../../components/PlayerAvatar", () => ({
+  default: ({ name }: { name: string }) => (
+    <span data-testid="player-avatar">{name}</span>
+  ),
+}));
+
+vi.mock("phosphor-react", () => ({
+  GridFour: () => <span />,
+  List: () => <span />,
+  SortAscending: () => <span />,
+  PencilSimple: () => <span />,
+  CalendarX: () => <span />,
+  ClockCounterClockwise: () => <span />,
+  Plus: () => <span />,
+}));
+
+vi.mock("@rivora-labz/snook-shared", () => ({}));
+
+// ---------------------------------------------------------------------------
+// Import component after mocks
+// ---------------------------------------------------------------------------
+
+import TablesIndexClient from "./TablesIndexClient";
+
+// ---------------------------------------------------------------------------
+// Fixture helpers
+// ---------------------------------------------------------------------------
+
+const makeTable = (overrides: Record<string, unknown> = {}) => ({
+  id: "t1",
+  tableNumber: 1,
+  type: "SNOOKER",
+  hourlyRate: 15000,
+  pricePerHourFils: 15000,
+  status: "AVAILABLE" as const,
+  todayRevenue: 45000,
+  utilization: 65,
+  currentBooking: null,
+  ...overrides,
+});
+
+// ---------------------------------------------------------------------------
+// Suite
+// ---------------------------------------------------------------------------
+
+describe("TablesIndexClient", () => {
+  beforeEach(() => {
+    apiFetchMock.mockReset();
+    // Stub setInterval to avoid running the 15-second poll in tests
+    vi.spyOn(globalThis, "setInterval").mockReturnValue(0 as unknown as ReturnType<typeof setInterval>);
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  // 1. Loading skeleton
+  it("renders 6 animate-pulse skeleton cards while fetch is pending", () => {
+    apiFetchMock.mockReturnValue(new Promise(() => {})); // never resolves
+    const { container } = render(<TablesIndexClient />);
+    const pulses = container.querySelectorAll(".animate-pulse");
+    expect(pulses.length).toBe(6);
+  });
+
+  // 2. "Tables" heading
+  it("renders 'Tables' heading after fetch resolves", async () => {
+    apiFetchMock.mockResolvedValue({ items: [makeTable()] });
+    render(<TablesIndexClient />);
+    await waitFor(() => expect(screen.getByText("Tables")).toBeTruthy());
+  });
+
+  // 3. "Add Table" button present
+  it("renders 'Add Table' button", async () => {
+    apiFetchMock.mockResolvedValue({ items: [] });
+    render(<TablesIndexClient />);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /Add Table/i })).toBeTruthy()
+    );
+  });
+
+  // 4. Filter tab labels
+  it("renders all five filter tabs (All, Available, In Use, Reserved, Maintenance)", async () => {
+    apiFetchMock.mockResolvedValue({ items: [] });
+    render(<TablesIndexClient />);
+    await waitFor(() => expect(screen.getByText(/^All \(/)).toBeTruthy());
+    expect(screen.getByText(/^Available \(/)).toBeTruthy();
+    expect(screen.getByText(/^In Use \(/)).toBeTruthy();
+    expect(screen.getByText(/^Reserved \(/)).toBeTruthy();
+    expect(screen.getByText(/^Maintenance \(/)).toBeTruthy();
+  });
+
+  // 5. Tab counts update after data loads
+  it("tab counts reflect loaded data", async () => {
+    apiFetchMock.mockResolvedValue({
+      items: [
+        makeTable({ id: "t1", status: "AVAILABLE" }),
+        makeTable({ id: "t2", status: "AVAILABLE" }),
+        makeTable({ id: "t3", status: "IN_PLAY" }),
+      ],
+    });
+    render(<TablesIndexClient />);
+    await waitFor(() => expect(screen.getByText("All (3)")).toBeTruthy());
+    expect(screen.getByText("Available (2)")).toBeTruthy();
+    expect(screen.getByText("In Use (1)")).toBeTruthy();
+    expect(screen.getByText("Reserved (0)")).toBeTruthy();
+    expect(screen.getByText("Maintenance (0)")).toBeTruthy();
+  });
+
+  // 6. Table card renders padded table number
+  it("renders table number as 'Table 01' on the card", async () => {
+    apiFetchMock.mockResolvedValue({ items: [makeTable({ tableNumber: 1 })] });
+    render(<TablesIndexClient />);
+    await waitFor(() => expect(screen.getByText("Table 01")).toBeTruthy());
+  });
+
+  // 7. Status badge label
+  it("renders 'Available' status badge label on an AVAILABLE table card", async () => {
+    apiFetchMock.mockResolvedValue({ items: [makeTable({ status: "AVAILABLE" })] });
+    render(<TablesIndexClient />);
+    await waitFor(() => expect(screen.getByText("Available")).toBeTruthy());
+  });
+
+  // 8. Add Table button opens AddTableModal
+  it("clicking 'Add Table' opens AddTableModal", async () => {
+    apiFetchMock.mockResolvedValue({ items: [] });
+    render(<TablesIndexClient />);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /Add Table/i })).toBeTruthy()
+    );
+    expect(screen.queryByTestId("add-modal")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Add Table/i }));
+    expect(screen.getByTestId("add-modal")).toBeTruthy();
+  });
+
+  // 9. Edit button on card opens EditTableModal
+  it("clicking the Edit button on a card opens EditTableModal", async () => {
+    apiFetchMock.mockResolvedValue({ items: [makeTable()] });
+    render(<TablesIndexClient />);
+    await waitFor(() => expect(screen.getByText("Table 01")).toBeTruthy());
+    expect(screen.queryByTestId("edit-modal")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Edit table" }));
+    expect(screen.getByTestId("edit-modal")).toBeTruthy();
+  });
+
+  // 10. IN_PLAY table with booking shows PlayerAvatar
+  it("shows PlayerAvatar for an IN_PLAY table that has a currentBooking", async () => {
+    apiFetchMock.mockResolvedValue({
+      items: [
+        makeTable({
+          id: "t1",
+          status: "IN_PLAY",
+          currentBooking: {
+            id: "bk1",
+            host: { id: "u1", displayName: "Alice Smith", avatarUrl: null },
+            startAt: "2026-06-01T10:00:00Z",
+            endAt: "2026-06-01T11:00:00Z",
+          },
+        }),
+      ],
+    });
+    render(<TablesIndexClient />);
+    await waitFor(() =>
+      expect(screen.getByTestId("player-avatar")).toBeTruthy()
+    );
+    expect(screen.getByTestId("player-avatar").textContent).toContain("Alice Smith");
+  });
+
+  // 11. Clicking "Available" filter tab filters to only AVAILABLE tables
+  it("clicking the 'Available' tab filters to only AVAILABLE tables", async () => {
+    apiFetchMock.mockResolvedValue({
+      items: [
+        makeTable({ id: "t1", tableNumber: 1, status: "AVAILABLE" }),
+        makeTable({ id: "t2", tableNumber: 2, status: "IN_PLAY" }),
+      ],
+    });
+    render(<TablesIndexClient />);
+    await waitFor(() => expect(screen.getByText("Table 01")).toBeTruthy());
+    expect(screen.getByText("Table 02")).toBeTruthy(); // both cards visible initially
+
+    fireEvent.click(screen.getByText(/^Available \(/));
+    expect(screen.getByText("Table 01")).toBeTruthy();
+    expect(screen.queryByText("Table 02")).toBeNull();
+  });
+
+  // 12. "All" tab shows all tables
+  it("'All' tab always shows all tables regardless of status", async () => {
+    apiFetchMock.mockResolvedValue({
+      items: [
+        makeTable({ id: "t1", tableNumber: 1, status: "AVAILABLE" }),
+        makeTable({ id: "t2", tableNumber: 2, status: "IN_PLAY" }),
+        makeTable({ id: "t3", tableNumber: 3, status: "MAINTENANCE" }),
+      ],
+    });
+    render(<TablesIndexClient />);
+    await waitFor(() => expect(screen.getByText("Table 01")).toBeTruthy());
+
+    // Switch away then back to All
+    fireEvent.click(screen.getByText(/^Available \(/));
+    fireEvent.click(screen.getByText(/^All \(/));
+
+    expect(screen.getByText("Table 01")).toBeTruthy();
+    expect(screen.getByText("Table 02")).toBeTruthy();
+    expect(screen.getByText("Table 03")).toBeTruthy();
+  });
+});
