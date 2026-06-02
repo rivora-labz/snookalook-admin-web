@@ -13,7 +13,7 @@ const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
 const release =
   process.env.NEXT_PUBLIC_GIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA;
 
-if (dsn) {
+if (dsn && !Sentry.getClient()) {
   Sentry.init({
     dsn,
     environment: process.env.NEXT_PUBLIC_VERCEL_ENV ?? process.env.NODE_ENV,
@@ -21,7 +21,8 @@ if (dsn) {
     tracesSampleRate: 0.1,
     replaysOnErrorSampleRate: 1.0,
     replaysSessionSampleRate: 0,
-    integrations: [
+    integrations: (defaults) => [
+      ...defaults.filter((i) => i.name !== "Replay"),
       Sentry.replayIntegration({
         maskAllText: true,
         blockAllMedia: true,
