@@ -13,7 +13,7 @@ const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
 const release =
   process.env.NEXT_PUBLIC_GIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA;
 
-if (dsn && !Sentry.getClient()) {
+if (dsn && !Sentry.isInitialized()) {
   Sentry.init({
     dsn,
     environment: process.env.NEXT_PUBLIC_VERCEL_ENV ?? process.env.NODE_ENV,
