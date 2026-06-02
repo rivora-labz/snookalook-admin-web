@@ -5,6 +5,7 @@ import type { StaffRole } from "@rivora-labz/snook-shared";
 import { toast } from "sonner";
 import { apiFetch, formatDate } from "../../../lib/api";
 import { useFocusTrap } from "../../../lib/use-focus-trap";
+import { useStaffSession } from "../../../lib/use-staff-session";
 
 interface StaffItem {
   id: string;
@@ -22,7 +23,7 @@ interface StaffItem {
 const ROLE_COLOR: Record<StaffRole, { bg: string; text: string }> = {
   OWNER: { bg: "#D4AF37", text: "#111" },
   MANAGER: { bg: "#3498DB", text: "#fff" },
-  STAFF: { bg: "#2A2A2A", text: "#B0B0B0" },
+  STAFF: { bg: "#E5E7EB", text: "#4B5563" },
 };
 
 const ROLE_LABEL: Record<StaffRole, string> = {
@@ -32,6 +33,10 @@ const ROLE_LABEL: Record<StaffRole, string> = {
 };
 
 export default function TeamPage() {
+  const { session } = useStaffSession();
+  const isOwner = session?.role === "OWNER";
+  const currentUserId = session?.userId;
+
   const [staff, setStaff] = useState<StaffItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,8 +44,14 @@ export default function TeamPage() {
   const [formUserId, setFormUserId] = useState("");
   const [formRole, setFormRole] = useState<StaffRole>("STAFF");
   const [submitting, setSubmitting] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null);
+  const [removing, setRemoving] = useState(false);
+
   const dialogRef = useFocusTrap<HTMLDivElement>(showModal, () => {
     if (!submitting) setShowModal(false);
+  });
+  const confirmRef = useFocusTrap<HTMLDivElement>(!!removeTarget, () => {
+    if (!removing) setRemoveTarget(null);
   });
 
   const fetchTeam = useCallback(async () => {
@@ -87,14 +98,18 @@ export default function TeamPage() {
     }
   };
 
-  const handleRemove = async (id: string, name: string) => {
-    if (!confirm(`Remove ${name} from the team?`)) return;
+  const handleRemoveConfirm = async () => {
+    if (!removeTarget) return;
+    setRemoving(true);
     try {
-      await apiFetch(`/admin/team/${id}`, { method: "DELETE" });
-      toast.success(`${name} removed`);
+      await apiFetch(`/admin/team/${removeTarget.id}`, { method: "DELETE" });
+      toast.success(`${removeTarget.name} removed`);
+      setRemoveTarget(null);
       await fetchTeam();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to remove staff");
+    } finally {
+      setRemoving(false);
     }
   };
 
@@ -105,12 +120,14 @@ export default function TeamPage() {
           <h1 className="font-display text-3xl text-th-text">Team</h1>
           <p className="mt-1 text-th-text-secondary">Manage staff members</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="rounded-button bg-th-gold px-4 py-2 text-sm font-medium text-black hover:bg-th-gold-hover"
-        >
-          + Add Staff
-        </button>
+        {isOwner && (
+          <button
+            onClick={() => setShowModal(true)}
+            className="rounded-button bg-th-gold px-4 py-2 text-sm font-medium text-black hover:bg-th-gold-hover"
+          >
+            + Add Staff
+          </button>
+        )}
       </header>
 
       {error && (
@@ -162,12 +179,14 @@ export default function TeamPage() {
                   <td className="px-5 py-3 text-th-text-secondary">{s.user.phone ?? "—"}</td>
                   <td className="px-5 py-3 text-th-text-secondary">{formatDate(s.createdAt)}</td>
                   <td className="px-5 py-3 text-right">
-                    <button
-                      onClick={() => handleRemove(s.id, s.user.displayName)}
-                      className="text-xs text-[#E74C3C] hover:underline"
-                    >
-                      Remove
-                    </button>
+                    {isOwner && s.user.id !== currentUserId && (
+                      <button
+                        onClick={() => setRemoveTarget({ id: s.id, name: s.user.displayName })}
+                        className="text-xs text-[#E74C3C] hover:underline"
+                      >
+                        Remove
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -237,6 +256,39 @@ export default function TeamPage() {
                 className="flex-1 rounded-button bg-th-gold px-4 py-2 text-sm font-medium text-black hover:bg-th-gold-hover disabled:opacity-50"
               >
                 {submitting ? "Adding..." : "Add"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove Confirm Modal */}
+      {removeTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="remove-staff-title"
+        >
+          <div ref={confirmRef} className="w-full max-w-sm rounded-card border border-th-divider bg-th-card p-6">
+            <h3 id="remove-staff-title" className="mb-2 font-display text-lg text-th-text">Remove Staff Member</h3>
+            <p className="mb-6 text-sm text-th-text-secondary">
+              Remove <strong className="text-th-text">{removeTarget.name}</strong> from the team?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setRemoveTarget(null)}
+                disabled={removing}
+                className="flex-1 rounded-button border border-th-divider px-4 py-2 text-sm text-th-text-secondary hover:bg-th-hover disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRemoveConfirm}
+                disabled={removing}
+                className="flex-1 rounded-button bg-[#E74C3C] px-4 py-2 text-sm font-medium text-white hover:bg-[#C0392B] disabled:opacity-50"
+              >
+                {removing ? "Removing..." : "Remove"}
               </button>
             </div>
           </div>
