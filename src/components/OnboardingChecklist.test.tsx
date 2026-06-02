@@ -16,7 +16,7 @@ import OnboardingChecklist, { type ChecklistStep } from "./OnboardingChecklist";
 const steps: ChecklistStep[] = [
   { id: "s1", title: "Add a table", description: "Set up your first table", href: "/tables", done: false },
   { id: "s2", title: "Configure hours", description: "Set opening hours", href: "/settings", done: false },
-  { id: "s3", title: "Invite staff", description: "Add team members", href: "/staff", done: true },
+  { id: "s3", title: "Invite staff", description: "Add team members", href: "/team", done: true },
 ];
 
 describe("OnboardingChecklist", () => {
@@ -51,7 +51,7 @@ describe("OnboardingChecklist", () => {
 
   it("skipped step has SKIPPED badge", () => {
     const stepsWithSkip: ChecklistStep[] = [
-      { id: "s1", title: "Step 1", description: "desc", href: "/x", done: false, skipped: true },
+      { id: "s1", title: "Step 1", description: "desc", href: "/tables", done: false, skipped: true },
     ];
     render(<OnboardingChecklist steps={stepsWithSkip} />);
     expect(screen.getByText("SKIPPED")).toBeTruthy();
@@ -61,7 +61,7 @@ describe("OnboardingChecklist", () => {
     const onSkip = vi.fn();
     render(<OnboardingChecklist steps={steps} onSkip={onSkip} />);
     const skipButtons = screen.getAllByText("Skip this step");
-    fireEvent.click(skipButtons[0]);
+    fireEvent.click(skipButtons[0]!);
     expect(onSkip).toHaveBeenCalledWith("s1");
   });
 
@@ -72,7 +72,7 @@ describe("OnboardingChecklist", () => {
 
   it("shows todo text when step has todo and is not done", () => {
     const stepsWithTodo: ChecklistStep[] = [
-      { id: "s1", title: "Step 1", description: "desc", href: "/x", done: false, todo: "Fix the config" },
+      { id: "s1", title: "Step 1", description: "desc", href: "/tables", done: false, todo: "Fix the config" },
     ];
     render(<OnboardingChecklist steps={stepsWithTodo} />);
     expect(screen.getByText("TODO: Fix the config")).toBeTruthy();
@@ -80,7 +80,7 @@ describe("OnboardingChecklist", () => {
 
   it("does not show todo text when step is done", () => {
     const doneWithTodo: ChecklistStep[] = [
-      { id: "s1", title: "Step 1", description: "desc", href: "/x", done: true, todo: "Should not show" },
+      { id: "s1", title: "Step 1", description: "desc", href: "/tables", done: true, todo: "Should not show" },
     ];
     render(<OnboardingChecklist steps={doneWithTodo} />);
     expect(screen.queryByText("TODO: Should not show")).toBeNull();

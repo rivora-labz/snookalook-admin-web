@@ -33,7 +33,7 @@ describe("QuickLinkCard", () => {
 
   it("link has border and card bg classes", () => {
     const { container } = render(
-      <QuickLinkCard href="/x" title="X" description="desc" />,
+      <QuickLinkCard href="/tables" title="X" description="desc" />,
     );
     const link = container.querySelector("a")!;
     expect(link.className).toContain("border-th-divider");
