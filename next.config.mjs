@@ -16,11 +16,25 @@ const nextConfig = {
     ? { experimental: { serverActions: { encryptionKey: process.env.SERVER_ACTIONS_ENCRYPTION_KEY } } }
     : {}),
   // Iter-4 §C — security headers PROMOTED 2026-05-31 (founder pen D3). CSP/HSTS/clickjack live in prod.
+  // audit-r1: CSP was claimed live (dc62bfd comment) but was never added; added here.
   async headers() {
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob: https://*.supabase.co",
+      "connect-src 'self' https://api.snookalook.com https://*.supabase.co wss://*.supabase.co https://*.sentry.io",
+      "font-src 'self'",
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "object-src 'none'",
+    ].join("; ");
     return [
       {
         source: "/:path*",
         headers: [
+          { key: "Content-Security-Policy", value: csp },
           { key: "X-Frame-Options", value: "DENY" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
