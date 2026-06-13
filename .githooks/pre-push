@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Doctrine 8.26 v2 — direct push to main BANNED.
+# Override (emergency only, founder-pen required): GIT_PUSH_MAIN_OK=1 git push origin main
+set -eu
+
+remote="$1"
+while read -r local_ref local_sha remote_ref remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main)
+      if [ "${GIT_PUSH_MAIN_OK:-0}" != "1" ]; then
+        echo "ERROR: direct push to main BANNED (Doctrine 8.26 v2)." >&2
+        echo "Path: dev-<role> -> dev (PR) -> main (cadence-merge PR, founder-OK)." >&2
+        echo "Emergency override: GIT_PUSH_MAIN_OK=1 git push $remote main" >&2
+        exit 1
+      fi
+      echo "WARNING: GIT_PUSH_MAIN_OK=1 set — direct main push allowed this invocation." >&2
+      ;;
+  esac
+done
+exit 0

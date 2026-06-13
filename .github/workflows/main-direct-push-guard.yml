@@ -1,0 +1,41 @@
+name: main-direct-push-guard
+
+# Doctrine 8.26 v2 — direct push to main BANNED. PR/merge_group only.
+# GitHub Free private repos cannot use Branch Protection / Rulesets API,
+# so this CI gate is the enforcement layer of last resort. Failing this
+# workflow does NOT undo the push, but flags it loudly for fleet review.
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (need parents)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Reject non-merge direct pushes
+        run: |
+          set -eu
+          actor="${{ github.actor }}"
+          sha="${{ github.sha }}"
+          parents=$(git log -1 --pretty=%P "$sha")
+          pcount=$(printf '%s\n' "$parents" | tr ' ' '\n' | grep -c .)
+          msg=$(git log -1 --pretty=%s "$sha")
+          printf 'actor=%s sha=%s parents=%s pcount=%s\n' "$actor" "$sha" "$parents" "$pcount"
+          printf 'subject=%s\n' "$msg"
+
+          if [ "$pcount" -ge 2 ]; then
+            echo "OK: merge commit ($pcount parents)."
+            exit 0
+          fi
+
+          echo "::error::Direct push to main detected (Doctrine 8.26 v2 violation)."
+          echo "::error::Allowed path: dev-<role> -> dev (PR) -> main (cadence-merge PR)."
+          echo "::error::Head commit has only $pcount parent(s); merge commits have >=2."
+          echo "::error::Subject: $msg"
+          exit 1
