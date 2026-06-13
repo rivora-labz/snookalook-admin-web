@@ -4,6 +4,15 @@ import { cookies } from "next/headers";
 import { API_BASE } from "../../lib/api-base";
 import { ADMIN_ACCESS_TOKEN_COOKIE } from "../../lib/runtime-auth";
 
+// H6.a — Vercel server-egress bypass route. Cloudflare DDoS-L7 (firewall_managed,
+// pre-firewall_custom phase) flags the Vercel ASN on /v1/auth/* with 1020 "Access
+// denied", and the WAF Skip rule we shipped at firewall_custom can't reach that
+// earlier phase. `vapi.bypass.snookalook.com` is a gray-cloud A record straight
+// to the VPS (Caddy + LE cert), used ONLY for server-action calls into auth
+// endpoints. Browser-origin calls keep using API_BASE (api.snookalook.com).
+const AUTH_BASE = "https://vapi.bypass.snookalook.com/v1";
+void API_BASE;
+
 // WEB.6.A — HttpOnly enforcement on admin session JWT cookie.
 //
 // P0 invariant: the JWT must never cross the JS trust boundary. No exported
@@ -50,7 +59,7 @@ export async function sendOtp(phone: string): Promise<SendOtpResult> {
   let res: Response;
   let rawBodyText = "";
   try {
-    res = await fetch(`${API_BASE}/auth/send-otp`, {
+    res = await fetch(`${AUTH_BASE}/auth/send-otp`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ phone }),
@@ -58,7 +67,7 @@ export async function sendOtp(phone: string): Promise<SendOtpResult> {
     });
   } catch (err) {
     console.error("[H6.a-diag] sendOtp fetch threw", {
-      api: `${API_BASE}/auth/send-otp`,
+      api: `${AUTH_BASE}/auth/send-otp`,
       err: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
     });
     return { ok: false, message: "Network error. Try again." };
@@ -72,7 +81,7 @@ export async function sendOtp(phone: string): Promise<SendOtpResult> {
   }
   if (!res.ok) {
     console.error("[H6.a-diag] sendOtp upstream non-OK", {
-      api: `${API_BASE}/auth/send-otp`,
+      api: `${AUTH_BASE}/auth/send-otp`,
       status: res.status,
       contentType: res.headers.get("content-type") || "",
       cfRay: res.headers.get("cf-ray") || "",
@@ -105,7 +114,7 @@ export async function loginWithOtp(
   let res: Response;
   let rawBodyText = "";
   try {
-    res = await fetch(`${API_BASE}/auth/verify-otp`, {
+    res = await fetch(`${AUTH_BASE}/auth/verify-otp`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ phone, otp }),
@@ -113,7 +122,7 @@ export async function loginWithOtp(
     });
   } catch (err) {
     console.error("[H6.a-diag] loginWithOtp fetch threw", {
-      api: `${API_BASE}/auth/verify-otp`,
+      api: `${AUTH_BASE}/auth/verify-otp`,
       err: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
     });
     return { ok: false, message: "Network error. Try again." };
@@ -137,7 +146,7 @@ export async function loginWithOtp(
 
   if (!res.ok || typeof body?.accessToken !== "string" || body.accessToken.length === 0) {
     console.error("[H6.a-diag] loginWithOtp upstream non-OK", {
-      api: `${API_BASE}/auth/verify-otp`,
+      api: `${AUTH_BASE}/auth/verify-otp`,
       status: res.status,
       contentType: res.headers.get("content-type") || "",
       cfRay: res.headers.get("cf-ray") || "",
