@@ -12,6 +12,8 @@ type Step = "phone" | "otp";
 
 const AUTH_MODE = getRuntimeAuthMode();
 const RESEND_COOLDOWN_SEC = 60;
+const SAVED_PHONE_KEY = "snl_admin_saved_phone";
+const SAVED_COUNTRY_KEY = "snl_admin_saved_country";
 
 function safeNext(raw: string | null): string {
   if (!raw) return "/";
@@ -31,7 +33,20 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [resendIn, setResendIn] = useState(0);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const savedPhone = window.localStorage.getItem(SAVED_PHONE_KEY);
+      const savedCountry = window.localStorage.getItem(SAVED_COUNTRY_KEY) as CountryCode | null;
+      if (savedPhone) setPhone(savedPhone);
+      if (savedCountry && findCountry(savedCountry)) setCountryCode(savedCountry);
+    } catch {
+      // localStorage unavailable (privacy mode) — silent fallback to empty field
+    }
+  }, []);
 
   const country = useMemo(() => findCountry(countryCode), [countryCode]);
 
@@ -108,12 +123,39 @@ function LoginForm() {
           throw new Error(result.message);
         }
       }
-      window.location.href = next;
+      const alreadySaved =
+        typeof window !== "undefined" &&
+        window.localStorage.getItem(SAVED_PHONE_KEY) === nationalDigits;
+      if (alreadySaved) {
+        window.location.href = next;
+        return;
+      }
+      setShowSaveDialog(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Incorrect or expired code.");
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const onSaveYes = () => {
+    try {
+      window.localStorage.setItem(SAVED_PHONE_KEY, nationalDigits);
+      window.localStorage.setItem(SAVED_COUNTRY_KEY, countryCode);
+    } catch {
+      // localStorage unavailable — proceed to redirect anyway
+    }
+    window.location.href = next;
+  };
+
+  const onSaveNo = () => {
+    try {
+      window.localStorage.removeItem(SAVED_PHONE_KEY);
+      window.localStorage.removeItem(SAVED_COUNTRY_KEY);
+    } catch {
+      // localStorage unavailable
+    }
+    window.location.href = next;
   };
 
   return (
@@ -216,6 +258,39 @@ function LoginForm() {
       {AUTH_MODE === "backend" && (
         <div className="mt-4 text-center text-xs text-th-text-tertiary">
           Backend OTP mode is active for this deploy. Use the seeded test code.
+        </div>
+      )}
+
+      {showSaveDialog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="save-phone-title"
+        >
+          <div className="w-full max-w-sm rounded-card border border-th-divider bg-th-card p-6">
+            <div id="save-phone-title" className="mb-2 font-display text-lg text-th-text">
+              Save this number?
+            </div>
+            <div className="mb-5 text-sm text-th-text-secondary">
+              Next time, we&apos;ll pre-fill <span className="text-th-text">{fullPhone}</span> so you skip
+              re-typing.
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={onSaveNo}
+                className="rounded-button border border-th-divider px-3 py-2 text-sm text-th-text-secondary hover:text-th-text"
+              >
+                Not now
+              </button>
+              <button
+                onClick={onSaveYes}
+                className="rounded-button bg-th-gold px-4 py-2 text-sm font-medium text-black hover:bg-th-gold-hover"
+              >
+                Save
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
