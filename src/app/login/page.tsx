@@ -1,20 +1,19 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { isValidPhoneNumber, type CountryCode } from "libphonenumber-js";
 import { createClient } from "../../lib/supabase/client";
 import { API_BASE } from "../../lib/api-base";
 import { getRuntimeAuthMode } from "../../lib/runtime-auth";
 import { loginWithOtp } from "../actions/admin-token";
+import { COUNTRIES, DEFAULT_COUNTRY, findCountry } from "./countries";
 
 type Step = "phone" | "otp";
 
-const PHONE_PREFIX = "+971";
 const AUTH_MODE = getRuntimeAuthMode();
 const RESEND_COOLDOWN_SEC = 60;
 
-// WEB.6.A out-of-scope follow-up: clamp `?next=` to same-origin paths so a
-// leaked redirect can't pair with any future token leak.
 function safeNext(raw: string | null): string {
   if (!raw) return "/";
   if (!raw.startsWith("/")) return "/";
@@ -27,12 +26,15 @@ function LoginForm() {
   const next = safeNext(searchParams.get("next"));
 
   const [step, setStep] = useState<Step>("phone");
+  const [countryCode, setCountryCode] = useState<CountryCode>(DEFAULT_COUNTRY.code);
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [resendIn, setResendIn] = useState(0);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const country = useMemo(() => findCountry(countryCode), [countryCode]);
 
   useEffect(() => {
     if (resendIn <= 0) {
@@ -54,11 +56,13 @@ function LoginForm() {
     };
   }, [resendIn]);
 
-  const fullPhone = phone.startsWith("+") ? phone : `${PHONE_PREFIX}${phone.replace(/^0+/, "")}`;
+  const nationalDigits = phone.replace(/\D/g, "").replace(/^0+/, "");
+  const fullPhone = `${country.dial}${nationalDigits}`;
+  const phoneValid = nationalDigits.length > 0 && isValidPhoneNumber(fullPhone, country.code);
 
   const sendOtp = async () => {
-    if (!/^\+\d{8,15}$/.test(fullPhone)) {
-      setError("Enter a valid phone number, e.g. 501234567");
+    if (!phoneValid) {
+      setError(`Enter a valid ${country.name} number, e.g. ${country.placeholder}`);
       return;
     }
     setSubmitting(true);
@@ -129,22 +133,38 @@ function LoginForm() {
         <div>
           <label className="mb-1 block text-xs text-th-text-secondary">Phone number</label>
           <div className="flex items-center gap-2">
-            <span className="rounded-input border border-th-divider bg-th-bg px-3 py-2 text-sm text-th-text-secondary">
-              {PHONE_PREFIX}
-            </span>
+            <select
+              aria-label="Country code"
+              value={countryCode}
+              onChange={(e) => {
+                setCountryCode(e.target.value as CountryCode);
+                setError(null);
+              }}
+              className="rounded-input border border-th-divider bg-th-bg px-2 py-2 text-sm text-th-text-secondary outline-none focus:border-th-gold"
+            >
+              {COUNTRIES.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.dial} {c.code}
+                </option>
+              ))}
+            </select>
             <input
               type="tel"
               inputMode="numeric"
+              autoComplete="tel-national"
               value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/[^\d+]/g, ""))}
-              placeholder="501234567"
+              maxLength={country.maxLen}
+              onChange={(e) =>
+                setPhone(e.target.value.replace(/\D/g, "").slice(0, country.maxLen))
+              }
+              placeholder={country.placeholder}
               className="flex-1 rounded-input border border-th-divider bg-th-bg px-3 py-2 text-sm text-th-text outline-none focus:border-th-gold"
             />
           </div>
 
           <button
             onClick={sendOtp}
-            disabled={submitting || phone.length < 7}
+            disabled={submitting || !phoneValid}
             className="mt-5 w-full rounded-button bg-th-gold px-4 py-2.5 text-sm font-medium text-black hover:bg-th-gold-hover disabled:opacity-50"
           >
             {submitting ? "Sending..." : "Send code"}
