@@ -4,7 +4,7 @@
  * and the backend `/v1/admin/system/*` endpoints.
  */
 import { cookies } from "next/headers";
-import { API_BASE } from "./api-base";
+import { SERVER_API_BASE } from "./api-base";
 import { ADMIN_ACCESS_TOKEN_COOKIE, getRuntimeAuthMode } from "./runtime-auth";
 import { createClient } from "./supabase/server";
 
@@ -48,7 +48,7 @@ export async function masterFetch<T>(
     ...(init.headers as Record<string, string> | undefined),
     ...authHeaders,
   };
-  const url = `${API_BASE}/admin/system${path}`;
+  const url = `${SERVER_API_BASE}/admin/system${path}`;
   const res = await fetch(url, { ...init, headers, cache: "no-store" });
   if (!res.ok) {
     const body = await res.text().catch(() => "");

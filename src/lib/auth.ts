@@ -1,5 +1,5 @@
 import { createClient } from "./supabase/server";
-import { API_BASE } from "./api-base";
+import { SERVER_API_BASE } from "./api-base";
 import { ADMIN_ACCESS_TOKEN_COOKIE, getRuntimeAuthMode } from "./runtime-auth";
 import { cookies } from "next/headers";
 
@@ -94,7 +94,7 @@ export async function getStaffContext(token: string, isDevUser = false): Promise
     const headers: Record<string, string> = isDevUser
       ? { "X-Dev-User": token }
       : { Authorization: `Bearer ${token}` };
-    const res = await fetch(`${API_BASE}/staff/me`, { headers, cache: "no-store" });
+    const res = await fetch(`${SERVER_API_BASE}/staff/me`, { headers, cache: "no-store" });
     if (!res.ok) return null;
     const body = await res.json();
     const sm = body.staffMember;

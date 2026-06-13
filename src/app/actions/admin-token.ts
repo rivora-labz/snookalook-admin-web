@@ -1,17 +1,13 @@
 "use server";
 
 import { cookies } from "next/headers";
-import { API_BASE } from "../../lib/api-base";
+import { SERVER_API_BASE } from "../../lib/api-base";
 import { ADMIN_ACCESS_TOKEN_COOKIE } from "../../lib/runtime-auth";
 
-// H6.a — Vercel server-egress bypass route. Cloudflare DDoS-L7 (firewall_managed,
-// pre-firewall_custom phase) flags the Vercel ASN on /v1/auth/* with 1020 "Access
-// denied", and the WAF Skip rule we shipped at firewall_custom can't reach that
-// earlier phase. `vapi.bypass.snookalook.com` is a gray-cloud A record straight
-// to the VPS (Caddy + LE cert), used ONLY for server-action calls into auth
-// endpoints. Browser-origin calls keep using API_BASE (api.snookalook.com).
-const AUTH_BASE = "https://vapi.bypass.snookalook.com/v1";
-void API_BASE;
+// Doctrine 8.36 (candidate) — All server-side fetches use SERVER_API_BASE
+// (vapi.bypass.snookalook.com) because Vercel ASN egress is BFM-blocked at
+// api.snookalook.com. See src/lib/api-base.ts for the class invariant.
+const AUTH_BASE = SERVER_API_BASE;
 
 // WEB.6.A — HttpOnly enforcement on admin session JWT cookie.
 //

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { API_BASE } from "../../../../lib/api-base";
+import { SERVER_API_BASE } from "../../../../lib/api-base";
 import { ADMIN_ACCESS_TOKEN_COOKIE, getRuntimeAuthMode } from "../../../../lib/runtime-auth";
 
 // WEB.6.A P0 fix — server-side proxy for backend-auth mode.
@@ -43,7 +43,7 @@ async function forward(
   const { path } = await ctx.params;
   const suffix = (path ?? []).map(encodeURIComponent).join("/");
   const search = req.nextUrl.search;
-  const target = `${API_BASE}/${suffix}${search}`;
+  const target = `${SERVER_API_BASE}/${suffix}${search}`;
 
   const auth = await buildAuthHeader();
   const fwdHeaders: Record<string, string> = {

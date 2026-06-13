@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { API_BASE } from "../../../../../lib/api-base";
+import { SERVER_API_BASE } from "../../../../../lib/api-base";
 import { ADMIN_ACCESS_TOKEN_COOKIE, getRuntimeAuthMode } from "../../../../../lib/runtime-auth";
 import { createClient } from "../../../../../lib/supabase/server";
 
@@ -25,7 +25,7 @@ async function resolveAuthHeader(): Promise<Record<string, string>> {
 export async function GET(req: NextRequest) {
   const headers = await resolveAuthHeader();
   const search = req.nextUrl.search;
-  const url = `${API_BASE}/admin/system/audit/export${search}`;
+  const url = `${SERVER_API_BASE}/admin/system/audit/export${search}`;
   const res = await fetch(url, { headers, cache: "no-store" });
   if (!res.ok) {
     return NextResponse.json(

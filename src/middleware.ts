@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import * as Sentry from "@sentry/nextjs";
-import { API_BASE } from "./lib/api-base";
+import { SERVER_API_BASE } from "./lib/api-base";
 import { ADMIN_ACCESS_TOKEN_COOKIE, getRuntimeAuthMode, getSupabaseConfig } from "./lib/runtime-auth";
 
 const PUBLIC_PATHS = ["/login", "/forbidden", "/auth/callback", "/welcome"];
@@ -12,7 +12,7 @@ type StaffCheck = { status: StaffStatus; role: StaffRole | null };
 
 async function checkStaffOnce(headers: Record<string, string>): Promise<StaffCheck> {
   try {
-    const res = await fetch(`${API_BASE}/staff/me`, {
+    const res = await fetch(`${SERVER_API_BASE}/staff/me`, {
       headers,
       cache: "no-store",
     });
