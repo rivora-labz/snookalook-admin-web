@@ -39,6 +39,58 @@ export type LoginWithOtpResult =
   | { ok: true }
   | { ok: false; message: string };
 
+export type SendOtpResult =
+  | { ok: true }
+  | { ok: false; message: string };
+
+export async function sendOtp(phone: string): Promise<SendOtpResult> {
+  if (typeof phone !== "string" || !/^\+\d{8,15}$/.test(phone)) {
+    return { ok: false, message: "Invalid phone." };
+  }
+  let res: Response;
+  let rawBodyText = "";
+  try {
+    res = await fetch(`${API_BASE}/auth/send-otp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone }),
+      cache: "no-store",
+    });
+  } catch (err) {
+    console.error("[H6.a-diag] sendOtp fetch threw", {
+      api: `${API_BASE}/auth/send-otp`,
+      err: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
+    return { ok: false, message: "Network error. Try again." };
+  }
+  try { rawBodyText = await res.text(); } catch {}
+  let body: { message?: unknown } | null = null;
+  try {
+    body = rawBodyText ? (JSON.parse(rawBodyText) as { message?: unknown }) : null;
+  } catch {
+    body = null;
+  }
+  if (!res.ok) {
+    console.error("[H6.a-diag] sendOtp upstream non-OK", {
+      api: `${API_BASE}/auth/send-otp`,
+      status: res.status,
+      contentType: res.headers.get("content-type") || "",
+      cfRay: res.headers.get("cf-ray") || "",
+      server: res.headers.get("server") || "",
+      via: res.headers.get("via") || "",
+      bodyPreview: rawBodyText.slice(0, 240),
+    });
+    const upstreamMessage = typeof body?.message === "string" ? body.message : null;
+    const message =
+      upstreamMessage ??
+      `Failed to send code (${res.status}${
+        res.headers.get("cf-ray") ? `, cf=${res.headers.get("cf-ray")?.slice(0, 10)}` : ""
+      }).`;
+    return { ok: false, message };
+  }
+  return { ok: true };
+}
+
 export async function loginWithOtp(
   phone: string,
   otp: string,

@@ -4,9 +4,8 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { isValidPhoneNumber, type CountryCode } from "libphonenumber-js";
 import { createClient } from "../../lib/supabase/client";
-import { API_BASE } from "../../lib/api-base";
 import { getRuntimeAuthMode } from "../../lib/runtime-auth";
-import { loginWithOtp } from "../actions/admin-token";
+import { loginWithOtp, sendOtp as sendOtpAction } from "../actions/admin-token";
 import { COUNTRIES, DEFAULT_COUNTRY, findCountry } from "./countries";
 
 type Step = "phone" | "otp";
@@ -73,14 +72,9 @@ function LoginForm() {
         const { error: sbError } = await supabase.auth.signInWithOtp({ phone: fullPhone });
         if (sbError) throw sbError;
       } else {
-        const res = await fetch(`${API_BASE}/auth/send-otp`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ phone: fullPhone }),
-        });
-        if (!res.ok) {
-          const body = await res.json().catch(() => null);
-          throw new Error(body?.message ?? "Failed to send code.");
+        const result = await sendOtpAction(fullPhone);
+        if (!result.ok) {
+          throw new Error(result.message);
         }
       }
       setStep("otp");
