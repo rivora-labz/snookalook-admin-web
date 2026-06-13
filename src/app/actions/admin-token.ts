@@ -51,6 +51,7 @@ export async function loginWithOtp(
   }
 
   let res: Response;
+  let rawBodyText = "";
   try {
     res = await fetch(`${API_BASE}/auth/verify-otp`, {
       method: "POST",
@@ -58,17 +59,47 @@ export async function loginWithOtp(
       body: JSON.stringify({ phone, otp }),
       cache: "no-store",
     });
-  } catch {
+  } catch (err) {
+    console.error("[H6.a-diag] loginWithOtp fetch threw", {
+      api: `${API_BASE}/auth/verify-otp`,
+      err: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
     return { ok: false, message: "Network error. Try again." };
   }
 
-  const body = (await res.json().catch(() => null)) as
-    | { accessToken?: unknown; message?: unknown }
-    | null;
+  try {
+    rawBodyText = await res.text();
+  } catch (err) {
+    console.error("[H6.a-diag] loginWithOtp text() threw", {
+      status: res.status,
+      err: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+    });
+  }
+
+  let body: { accessToken?: unknown; message?: unknown } | null = null;
+  try {
+    body = rawBodyText ? (JSON.parse(rawBodyText) as { accessToken?: unknown; message?: unknown }) : null;
+  } catch {
+    body = null;
+  }
 
   if (!res.ok || typeof body?.accessToken !== "string" || body.accessToken.length === 0) {
+    console.error("[H6.a-diag] loginWithOtp upstream non-OK", {
+      api: `${API_BASE}/auth/verify-otp`,
+      status: res.status,
+      contentType: res.headers.get("content-type") || "",
+      cfRay: res.headers.get("cf-ray") || "",
+      server: res.headers.get("server") || "",
+      via: res.headers.get("via") || "",
+      bodyPreview: rawBodyText.slice(0, 240),
+    });
+    const upstreamMessage =
+      typeof body?.message === "string" ? body.message : null;
     const message =
-      typeof body?.message === "string" ? body.message : "Incorrect or expired code.";
+      upstreamMessage ??
+      `Backend rejected (${res.status}${
+        res.headers.get("cf-ray") ? `, cf=${res.headers.get("cf-ray")?.slice(0, 10)}` : ""
+      }).`;
     return { ok: false, message };
   }
 
