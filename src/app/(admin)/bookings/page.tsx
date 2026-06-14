@@ -166,23 +166,6 @@ export default function BookingsPage() {
         </div>
         <div className="flex items-center gap-4">
           <button
-            disabled
-            title="Coming soon"
-            className="flex items-center gap-2 px-4 h-[40px] bg-th-card border border-th-border rounded-lg text-[13px] font-medium text-th-text disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            <Calendar size={18} />
-            <span>This Week</span>
-            <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-              <path
-                d="M3 4.5L6 7.5L9 4.5"
-                stroke="var(--th-text-tertiary)"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-          <button
             onClick={() => setIsBookingOpen(true)}
             className="h-[40px] px-5 rounded-lg bg-[#D4AF37] hover:bg-[#F7D774] text-black font-display text-[14px] font-semibold shadow-gold-glow transition-colors"
           >
