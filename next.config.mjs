@@ -11,7 +11,9 @@ const nextConfig = {
   // T-NEW WEB §3 WEB.2 — stable Server Action encryption key across deploys. Without
   // this, Next.js auto-generates a per-build key, so action IDs (= hash of action body
   // + key) churn on every deploy; clients with cached chunks then hit UnrecognizedActionError.
-  // Pair with Vercel skewProtection (vercel.json). Rotate only on key compromise.
+  // Doctrine 8.11 primary protection. Vercel project-level Skew Protection lives in
+  // the dashboard / experimental.skewProtection — vercel.json root key is invalid schema.
+  // Rotate only on key compromise.
   ...(process.env.SERVER_ACTIONS_ENCRYPTION_KEY
     ? { experimental: { serverActions: { encryptionKey: process.env.SERVER_ACTIONS_ENCRYPTION_KEY } } }
     : {}),

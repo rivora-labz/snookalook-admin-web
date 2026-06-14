@@ -3,6 +3,7 @@ import type { Route } from "next";
 import { masterFetchSafe } from "../../../../lib/master-api";
 import { formatAED } from "../../../../lib/currency";
 import { formatDate, formatDateTime } from "../../../../lib/datetime";
+import CenterModerationActions from "../../../../components/master/CenterModerationActions";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -85,16 +86,24 @@ export default async function CenterDetailPage(props: { params: Promise<{ id: st
         ← All centers
       </Link>
 
-      <header className="flex flex-col gap-2">
-        <h1 className="font-display text-[28px] font-semibold text-th-text">{c.name}</h1>
-        <div className="font-inter text-[13px] text-th-text-tertiary">
-          {c.address} · {c.city}
+      <header className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-2">
+          <h1 className="font-display text-[28px] font-semibold text-th-text">{c.name}</h1>
+          <div className="font-inter text-[13px] text-th-text-tertiary">
+            {c.address} · {c.city}
+          </div>
+          <div className="flex gap-2 text-[11px]">
+            {c.archivedAt && <span className="text-[#E74C3C] border border-[#E74C3C]/30 bg-[#E74C3C]/10 px-2 py-0.5 rounded uppercase font-bold">Archived</span>}
+            {c.isSuspended && <span className="text-[#E74C3C] border border-[#E74C3C]/30 bg-[#E74C3C]/10 px-2 py-0.5 rounded uppercase font-bold">Suspended</span>}
+            {c.isFeatured && <span className="text-[#D4AF37] border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-2 py-0.5 rounded uppercase font-bold">Featured</span>}
+          </div>
         </div>
-        <div className="flex gap-2 text-[11px]">
-          {c.archivedAt && <span className="text-[#E74C3C] border border-[#E74C3C]/30 bg-[#E74C3C]/10 px-2 py-0.5 rounded uppercase font-bold">Archived</span>}
-          {c.isSuspended && <span className="text-[#E74C3C] border border-[#E74C3C]/30 bg-[#E74C3C]/10 px-2 py-0.5 rounded uppercase font-bold">Suspended</span>}
-          {c.isFeatured && <span className="text-[#D4AF37] border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-2 py-0.5 rounded uppercase font-bold">Featured</span>}
-        </div>
+        <CenterModerationActions
+          centerId={c.id}
+          centerName={c.name}
+          isSuspended={c.isSuspended}
+          archivedAt={c.archivedAt}
+        />
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

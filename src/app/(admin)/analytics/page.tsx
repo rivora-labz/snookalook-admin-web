@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
-import { TrendUp, TrendDown } from "phosphor-react";
+import { TrendUp, TrendDown, DownloadSimple } from "phosphor-react";
 import { apiFetch, formatAED } from "../../../lib/api";
 import PlayerAvatar from "../../../components/PlayerAvatar";
 
@@ -122,6 +122,13 @@ function formatDelta(pct: number | undefined): { text: string; isUp: boolean } |
   return { text: `${sign}${display}%`, isUp: pct >= 0 };
 }
 
+function csvEscape(v: string | number | null | undefined): string {
+  if (v == null) return "";
+  const s = String(v);
+  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
 export default function AnalyticsPage() {
   const [activePeriod, setActivePeriod] = useState<PeriodLabel>("Month");
   const [data, setData] = useState<AnalyticsResponse | null>(null);
@@ -194,6 +201,60 @@ export default function AnalyticsPage() {
     },
   ];
 
+  const handleExportCSV = () => {
+    if (!data) return;
+    const { kpis, revenueTrend, topPlayers, tableUtilization, bookingSources } = data;
+    const lines: string[] = [];
+
+    lines.push("# KPI Summary");
+    lines.push(`Period,${activePeriod}`);
+    lines.push(`Total Revenue (AED),${(kpis.revenue / 100).toFixed(2)}`);
+    lines.push(`Total Bookings,${kpis.totalBookings}`);
+    lines.push(`Avg Booking Value (AED),${(kpis.avgBookingValue / 100).toFixed(2)}`);
+    lines.push(`New Players,${kpis.newPlayers}`);
+    lines.push(`Completion Rate,${(kpis.completionRate * 100).toFixed(1)}%`);
+    lines.push(`Cancellation Rate,${(kpis.cancellationRate * 100).toFixed(1)}%`);
+    lines.push("");
+
+    lines.push("# Revenue Trend");
+    lines.push("Date,Revenue (AED)");
+    for (const p of revenueTrend) {
+      lines.push(`${p.date},${(p.revenue / 100).toFixed(2)}`);
+    }
+    lines.push("");
+
+    lines.push("# Top Players");
+    lines.push("Rank,Player,Games Played,Total Spent (AED)");
+    topPlayers.forEach((p, i) => {
+      lines.push(`${i + 1},${csvEscape(p.displayName)},${p.gamesPlayed},${(p.totalSpent / 100).toFixed(2)}`);
+    });
+    lines.push("");
+
+    lines.push("# Table Utilization");
+    lines.push("Table,Type,Utilization %,Booked Minutes");
+    for (const t of tableUtilization) {
+      lines.push(`T${t.tableNumber},${csvEscape(t.type)},${(t.utilization * 100).toFixed(1)},${t.totalBookedMinutes}`);
+    }
+    lines.push("");
+
+    lines.push("# Booking Sources");
+    lines.push("Source,Count");
+    for (const s of bookingSources) {
+      lines.push(`${csvEscape(sourceLabel(s.source))},${s.count}`);
+    }
+
+    const csv = lines.join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `analytics-${activePeriod.toLowerCase()}-${new Date().toISOString().split("T")[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
@@ -213,20 +274,30 @@ export default function AnalyticsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="font-display text-[24px] font-semibold text-th-text">Analytics</h1>
-        <div className="bg-th-card p-1 rounded-lg border border-[var(--th-border)] flex items-center">
-          {(["Day", "Week", "Month", "Year"] as PeriodLabel[]).map((p) => (
-            <button
-              key={p}
-              onClick={() => setActivePeriod(p)}
-              className={`px-4 py-1.5 rounded-md text-[13px] font-medium transition-colors ${
-                activePeriod === p
-                  ? "bg-th-divider text-th-text shadow-sm"
-                  : "text-th-text-tertiary hover:text-th-text hover:bg-[var(--th-hover)]"
-              }`}
-            >
-              {p}
-            </button>
-          ))}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleExportCSV}
+            disabled={loading || !data}
+            className="flex items-center gap-2 h-[36px] px-4 rounded-lg bg-th-card border border-th-border text-[13px] font-medium text-th-text hover:bg-th-elevated transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <DownloadSimple size={15} />
+            Export CSV
+          </button>
+          <div className="bg-th-card p-1 rounded-lg border border-[var(--th-border)] flex items-center">
+            {(["Day", "Week", "Month", "Year"] as PeriodLabel[]).map((p) => (
+              <button
+                key={p}
+                onClick={() => setActivePeriod(p)}
+                className={`px-4 py-1.5 rounded-md text-[13px] font-medium transition-colors ${
+                  activePeriod === p
+                    ? "bg-th-divider text-th-text shadow-sm"
+                    : "text-th-text-tertiary hover:text-th-text hover:bg-[var(--th-hover)]"
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

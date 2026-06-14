@@ -8,7 +8,9 @@
     "build": "next build",
     "start": "next start -p 3000",
     "lint": "next lint --max-warnings 0",
+    "lint:server-bypass": "bash scripts/lint-server-bypass.sh",
     "typecheck": "tsc --noEmit",
+    "prebuild": "bash scripts/lint-server-bypass.sh",
     "analyze": "ANALYZE=true next build",
     "test": "vitest run",
     "test:watch": "vitest"

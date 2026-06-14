@@ -6,6 +6,7 @@ const getSessionMock = vi.fn();
 
 vi.mock("./api-base", () => ({
   API_BASE: "https://api.example.com/v1",
+  SERVER_API_BASE: "https://server-api.example.com/v1",
 }));
 
 vi.mock("./runtime-auth", () => ({
@@ -99,7 +100,7 @@ describe("getStaffContext", () => {
     vi.stubGlobal("fetch", f);
     const { getStaffContext } = await freshAuth();
     await getStaffContext("real-token");
-    expect(f.mock.calls[0]![0]).toBe("https://api.example.com/v1/staff/me");
+    expect(f.mock.calls[0]![0]).toBe("https://server-api.example.com/v1/staff/me");
     expect((f.mock.calls[0]![1] as RequestInit).headers).toEqual({
       Authorization: "Bearer real-token",
     });
