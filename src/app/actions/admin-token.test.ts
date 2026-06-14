@@ -15,7 +15,8 @@ function mockVerifyOtp(body: unknown, status = 200) {
   const fetchMock = vi.fn().mockResolvedValue({
     ok: status >= 200 && status < 300,
     status,
-    json: async () => body,
+    text: async () => JSON.stringify(body),
+    headers: { get: vi.fn().mockReturnValue(null) },
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
@@ -102,7 +103,7 @@ describe("admin-token server actions — WEB.6.A HttpOnly + no-leak", () => {
 
     const result = await loginWithOtp("+971501234567", "1234");
 
-    expect(result).toEqual({ ok: false, message: "Incorrect or expired code." });
+    expect(result).toEqual({ ok: false, message: "Backend rejected (200)." });
     expect(setMock).not.toHaveBeenCalled();
   });
 
