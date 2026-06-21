@@ -7,6 +7,7 @@ const getSessionMock = vi.fn();
 
 vi.mock("./api-base", () => ({
   API_BASE: "https://api.example.com/v1",
+  SERVER_API_BASE: "https://server-api.example.com/v1",
 }));
 
 vi.mock("./runtime-auth", () => ({
@@ -57,7 +58,7 @@ describe("masterFetch — auth header resolution", () => {
     const { masterFetch } = await freshModule();
     await masterFetch("/centers");
     const call = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0]!;
-    expect(call[0]).toBe("https://api.example.com/v1/admin/system/centers");
+    expect(call[0]).toBe("https://server-api.example.com/v1/admin/system/centers");
     expect((call[1] as RequestInit).headers).toMatchObject({
       Authorization: "Bearer sb-jwt",
     });
