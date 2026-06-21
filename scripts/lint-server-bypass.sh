@@ -47,9 +47,12 @@ done
 
 for d in "${DIRS[@]}"; do
   if [[ -d "$d" ]]; then
+    _tmp=$(mktemp)
+    find "$d" -type f \( -name "*.ts" -o -name "*.tsx" \) > "$_tmp"
     while IFS= read -r f; do
       check_file "$f"
-    done < <(find "$d" -type f \( -name "*.ts" -o -name "*.tsx" \))
+    done < "$_tmp"
+    rm -f "$_tmp"
   fi
 done
 
