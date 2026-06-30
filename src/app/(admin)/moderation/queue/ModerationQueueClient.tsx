@@ -8,17 +8,19 @@ import { useStaffSession } from "../../../../lib/use-staff-session";
 import Drawer from "../../../../components/Drawer";
 
 type ReportReason =
-  | "OBJECTIONABLE_CONTENT"
   | "HARASSMENT"
-  | "IMPERSONATION"
+  | "HATE_SPEECH"
   | "SPAM"
+  | "INAPPROPRIATE_CONTENT"
+  | "CHEATING"
   | "OTHER";
 
 type Resolution =
+  | "NO_ACTION"
+  | "USER_WARNED"
   | "CONTENT_REMOVED"
   | "USER_SUSPENDED"
-  | "USER_EJECTED"
-  | "NO_ACTION";
+  | "USER_EJECTED";
 
 interface ReportItem {
   id: string;
@@ -28,7 +30,7 @@ interface ReportItem {
   chatMessage: { body: string; bookingId: string } | null;
   reason: ReportReason;
   freeText: string | null;
-  status: "PENDING" | "IN_REVIEW";
+  status: "PENDING" | "RESOLVED" | "DISMISSED";
   createdAt: string;
 }
 
@@ -38,10 +40,11 @@ interface QueueResponse {
 }
 
 const REASON_LABEL: Record<ReportReason, string> = {
-  OBJECTIONABLE_CONTENT: "Objectionable",
   HARASSMENT: "Harassment",
-  IMPERSONATION: "Impersonation",
+  HATE_SPEECH: "Hate speech",
   SPAM: "Spam",
+  INAPPROPRIATE_CONTENT: "Inappropriate",
+  CHEATING: "Cheating",
   OTHER: "Other",
 };
 
@@ -54,6 +57,7 @@ interface ResolutionOpt {
 
 const RESOLUTION_OPTS: ResolutionOpt[] = [
   { resolution: "NO_ACTION", label: "Dismiss", confirmLabel: "Confirm dismiss", tone: "neutral" },
+  { resolution: "USER_WARNED", label: "Warn user", confirmLabel: "Confirm warn", tone: "amber" },
   { resolution: "CONTENT_REMOVED", label: "Remove content", confirmLabel: "Confirm remove", tone: "amber" },
   { resolution: "USER_SUSPENDED", label: "Suspend 7d", confirmLabel: "Confirm suspend", tone: "amber" },
   { resolution: "USER_EJECTED", label: "Eject permanently", confirmLabel: "Confirm eject", tone: "red" },
