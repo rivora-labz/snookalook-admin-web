@@ -17,6 +17,7 @@ import {
   Gear,
   SignOut,
   Trophy,
+  ShieldCheck,
 } from "phosphor-react";
 
 const AUTH_MODE = getRuntimeAuthMode();
@@ -36,6 +37,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/analytics", label: "Analytics", icon: ChartLineUp },
   { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
   { href: "/earnings", label: "Payments", icon: CreditCard },
+  { href: "/moderation/queue", label: "Moderation", icon: ShieldCheck },
   { href: "/settings", label: "Settings", icon: Gear },
 ];
 
