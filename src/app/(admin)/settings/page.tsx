@@ -295,6 +295,7 @@ export default function SettingsPage() {
   const [inviteSelectedPlayer, setInviteSelectedPlayer] = useState<PlayerResult | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const inviteSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inviteRequestId = useRef(0);
 
   // Must be declared before useFocusTrap so the callback closure can reference it.
   function closeInviteDialog() {
@@ -460,14 +461,19 @@ export default function SettingsPage() {
     if (inviteSearchTimer.current) clearTimeout(inviteSearchTimer.current);
     if (!q.trim()) { setInviteResults([]); setInviteSearching(false); return; }
     setInviteSearching(true);
+    const thisRequest = ++inviteRequestId.current;
     inviteSearchTimer.current = setTimeout(async () => {
       try {
         const res = await apiFetch<{ items: PlayerResult[] }>("/admin/players?search=" + encodeURIComponent(q));
+        if (thisRequest !== inviteRequestId.current) return; // stale — discard
         setInviteResults(res.items);
       } catch {
+        if (thisRequest !== inviteRequestId.current) return;
         setInviteResults([]);
       } finally {
-        setInviteSearching(false);
+        if (thisRequest === inviteRequestId.current) {
+          setInviteSearching(false);
+        }
         inviteSearchTimer.current = null;
       }
     }, 200);

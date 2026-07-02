@@ -369,17 +369,7 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
                     )}
                   </div>
                 ))}
-                <div className="h-[1px] bg-[var(--th-hover)] my-1.5" />
-                <div
-                  onClick={() => {
-                    setBookingPlayer("Guest");
-                    setBookingPlayerAvatar("");
-                    setIsPlayerDropdownOpen(false);
-                  }}
-                  className="px-3 h-[36px] flex items-center text-[#D4AF37] text-[13px] font-medium hover:bg-[var(--th-hover)] cursor-pointer transition-colors"
-                >
-                  + Add guest
-                </div>
+                {/* Guest booking hidden — backend requires a valid UUID hostUserId (no guest path). */}
               </div>
             )}
           </div>
