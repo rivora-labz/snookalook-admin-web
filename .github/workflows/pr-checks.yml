@@ -1,0 +1,44 @@
+name: pr-checks
+
+# Doctrine mechanization (2026-07-02): 8.5f stale-base gate + 8.11 Server-Action
+# skew-protection static gate. See docs/doctrine in the fleet-meta repo.
+
+on:
+  pull_request:
+
+concurrency:
+  group: pr-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  doctrine-gates:
+    name: doctrine gates (8.5f + 8.11)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Stale-base gate (Doctrine 8.5f)
+        run: |
+          git fetch origin "${{ github.base_ref }}"
+          git merge-base --is-ancestor "origin/${{ github.base_ref }}" HEAD || {
+            echo "::error::branch is BEHIND origin/${{ github.base_ref }} — stale-base regression class (Doctrine 8.5f). Merge/rebase the base branch first."
+            exit 1
+          }
+          echo "8.5f clean — base is ancestor of HEAD"
+
+      - name: Server-Action skew-protection static gate (Doctrine 8.11)
+        run: |
+          if grep -rl "use server" src 2>/dev/null | head -1 >/dev/null; then
+            grep -q "serverActions" next.config.* || {
+              echo "::error::Doctrine 8.11 — Server Actions present but next.config has no serverActions config (allowedOrigins). Skew Protection + allowedOrigins required."
+              exit 1
+            }
+            grep -rq "SERVER_ACTIONS_ENCRYPTION_KEY" next.config.* .env.example 2>/dev/null \
+              || echo "::warning::Doctrine 8.11 — SERVER_ACTIONS_ENCRYPTION_KEY not referenced in config/env example; verify the Vercel env pin (PR #60) still stands."
+            echo "8.11 static gate passed"
+          else
+            echo "no Server Actions in src — 8.11 n/a"
+          fi
