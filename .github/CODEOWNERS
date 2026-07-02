@@ -1,0 +1,4 @@
+# CODEOWNERS — review-routing metadata only (single-founder org).
+# Required-reviews stay OFF by design: sole member cannot approve own PRs;
+# quality gate = fleet curator+architect audit lane (principal-merge.sh).
+* @Narayan-Dhingra
