@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { X, Check, WarningCircle } from "phosphor-react";
 import { Toaster, toast } from "sonner";
 import AdminNav from "./AdminNav";
@@ -8,7 +9,8 @@ import AdminHeader from "./AdminHeader";
 import DrawerOverlay from "./DrawerOverlay";
 import PlayerAvatar from "./PlayerAvatar";
 import { AdminProvider, useAdmin } from "../lib/AdminContext";
-import { apiFetch, formatAED } from "../lib/api";
+import { apiFetch, formatAED, ApiError } from "../lib/api";
+import { assembleDubaiStartAt, getTodayDubai } from "../lib/datetime";
 import {
   useAdminActivity,
   formatRelativeTime,
@@ -60,13 +62,19 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
   const { isBookingOpen, setIsBookingOpen, isActivityOpen, setIsActivityOpen } =
     useAdmin();
 
+  const router = useRouter();
+
   const [bookingPlayer, setBookingPlayer] = useState("");
+  const [bookingPlayerId, setBookingPlayerId] = useState("");
   const [bookingPlayerAvatar, setBookingPlayerAvatar] = useState("");
   const [isPlayerDropdownOpen, setIsPlayerDropdownOpen] = useState(false);
   const [bookingSlot, setBookingSlot] = useState("");
+  const [bookingDate, setBookingDate] = useState(() => getTodayDubai());
   const [bookingTableId, setBookingTableId] = useState("");
   const [bookingDuration, setBookingDuration] = useState("1 hr");
   const [customDuration, setCustomDuration] = useState(1);
+  const [bookingSubmitting, setBookingSubmitting] = useState(false);
+  const [bookingError, setBookingError] = useState<string | null>(null);
 
   const [actFilter, setActFilter] = useState<ActivityFilter>("All");
   const [actFlash, setActFlash] = useState<string | null>(null);
@@ -166,33 +174,80 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
   );
 
   const isBookingValid =
-    bookingPlayer !== "" &&
+    bookingPlayerId !== "" &&
     bookingSlot !== "" &&
+    bookingDate !== "" &&
     bookingTableId !== "" &&
     (bookingDuration !== "Custom" || customDuration > 0);
 
-  const handleBookingConfirm = () => {
-    if (!isBookingValid) return;
-    toast.custom(
-      () => (
-        <div className="flex items-center gap-3 bg-th-card border-l-[3px] border-[#2ECC71] rounded-xl px-4 py-3 w-[320px] shadow-lg">
-          <div className="w-5 h-5 rounded-full bg-[#2ECC71]/20 flex items-center justify-center flex-shrink-0">
-            <Check size={12} weight="bold" className="text-[#2ECC71]" />
+  const handleBookingConfirm = async () => {
+    if (!isBookingValid || bookingSubmitting) return;
+    setBookingError(null);
+
+    const durationMinutes = (() => {
+      if (bookingDuration === "Custom") return customDuration * 60;
+      return parseInt(bookingDuration) * 60;
+    })();
+
+    if (durationMinutes % 30 !== 0) {
+      setBookingError("Duration must be a multiple of 30 minutes.");
+      return;
+    }
+
+    const startAt = assembleDubaiStartAt(bookingDate, bookingSlot);
+
+    setBookingSubmitting(true);
+    try {
+      await apiFetch("/admin/bookings", {
+        method: "POST",
+        body: JSON.stringify({
+          tableId: bookingTableId,
+          hostUserId: bookingPlayerId,
+          startAt,
+          durationMinutes,
+          matchMode: "SOLO",
+        }),
+      });
+
+      toast.custom(
+        () => (
+          <div className="flex items-center gap-3 bg-th-card border-l-[3px] border-[#2ECC71] rounded-xl px-4 py-3 w-[320px] shadow-lg">
+            <div className="w-5 h-5 rounded-full bg-[#2ECC71]/20 flex items-center justify-center flex-shrink-0">
+              <Check size={12} weight="bold" className="text-[#2ECC71]" />
+            </div>
+            <span className="font-inter text-[13px] text-th-text font-medium truncate">
+              Booking confirmed for {bookingPlayer} · T{selectedTable?.tableNumber ?? "?"} · {bookingSlot}
+            </span>
           </div>
-          <span className="font-inter text-[13px] text-th-text font-medium truncate">
-            Booking confirmed for {bookingPlayer} · T{selectedTable?.tableNumber ?? "?"} · {bookingSlot}
-          </span>
-        </div>
-      ),
-      { duration: 3000, position: "bottom-center" }
-    );
-    setIsBookingOpen(false);
-    setBookingPlayer("");
-    setBookingPlayerAvatar("");
-    setBookingSlot("");
-    setBookingTableId("");
-    setBookingDuration("1 hr");
-    setCustomDuration(1);
+        ),
+        { duration: 3000, position: "bottom-center" }
+      );
+
+      setIsBookingOpen(false);
+      setBookingPlayer("");
+      setBookingPlayerId("");
+      setBookingPlayerAvatar("");
+      setBookingSlot("");
+      setBookingTableId("");
+      setBookingDuration("1 hr");
+      setCustomDuration(1);
+      setBookingDate(getTodayDubai());
+      router.refresh();
+    } catch (err: unknown) {
+      if (err instanceof ApiError) {
+        if (err.status === 409) {
+          setBookingError("This slot is already taken. Please choose another time.");
+        } else if (err.status === 403) {
+          setBookingError("Booking exceeds the staff price cap. Contact an owner.");
+        } else {
+          setBookingError(err.message || "Booking failed. Please try again.");
+        }
+      } else {
+        setBookingError("Booking failed. Please try again.");
+      }
+    } finally {
+      setBookingSubmitting(false);
+    }
   };
 
   const handleActivityClick = (id: string) => {
@@ -267,8 +322,10 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
                 value={bookingPlayer}
                 onChange={(e) => {
                   setBookingPlayer(e.target.value);
+                  setBookingPlayerId("");
                   setPlayerQuery(e.target.value);
                   setIsPlayerDropdownOpen(true);
+                  setBookingError(null);
                 }}
                 onClick={() => setIsPlayerDropdownOpen(true)}
               />
@@ -286,8 +343,10 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
                     key={p.userId}
                     onClick={() => {
                       setBookingPlayer(p.displayName);
+                      setBookingPlayerId(p.userId);
                       setBookingPlayerAvatar(p.avatarUrl ?? p.displayName);
                       setIsPlayerDropdownOpen(false);
+                      setBookingError(null);
                     }}
                     className="px-3 h-[36px] flex items-center justify-between hover:bg-[var(--th-hover)] cursor-pointer transition-colors"
                   >
@@ -310,28 +369,24 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
                     )}
                   </div>
                 ))}
-                <div className="h-[1px] bg-[var(--th-hover)] my-1.5" />
-                <div
-                  onClick={() => {
-                    setBookingPlayer("Guest");
-                    setBookingPlayerAvatar("");
-                    setIsPlayerDropdownOpen(false);
-                  }}
-                  className="px-3 h-[36px] flex items-center text-[#D4AF37] text-[13px] font-medium hover:bg-[var(--th-hover)] cursor-pointer transition-colors"
-                >
-                  + Add guest
-                </div>
+                {/* Guest booking hidden — backend requires a valid UUID hostUserId (no guest path). */}
               </div>
             )}
           </div>
 
           {/* Date */}
           <div className="flex flex-col gap-2">
-            <label className="font-inter text-[12px] text-th-text-tertiary">
+            <label
+              htmlFor="booking-date"
+              className="font-inter text-[12px] text-th-text-tertiary"
+            >
               Date
             </label>
             <input
+              id="booking-date"
               type="date"
+              value={bookingDate}
+              onChange={(e) => { setBookingDate(e.target.value); setBookingError(null); }}
               className="w-full bg-th-card border border-th-divider rounded-xl px-4 py-3 text-[14px] text-th-text focus:outline-none focus:border-[#D4AF37]"
             />
           </div>
@@ -479,23 +534,36 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
-        <div className="p-6 border-t border-th-card bg-th-bg flex gap-4 sticky bottom-0">
-          <button
-            onClick={() => setIsBookingOpen(false)}
-            className="flex-1 h-[40px] rounded-lg font-inter text-[14px] text-th-text-tertiary hover:text-th-text hover:bg-[var(--th-hover)] transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={isBookingValid ? handleBookingConfirm : undefined}
-            className={`flex-1 h-[40px] rounded-lg font-inter text-[14px] font-semibold transition-all ${
-              isBookingValid
-                ? "bg-[#D4AF37] hover:bg-[#F7D774] text-black"
-                : "bg-[#D4AF37]/50 text-black/50 cursor-not-allowed"
-            }`}
-          >
-            Confirm Booking
-          </button>
+        <div className="border-t border-th-card bg-th-bg sticky bottom-0">
+          {bookingError && (
+            <div
+              role="alert"
+              className="px-6 pt-4 pb-0 font-inter text-[12px] text-[#E74C3C]"
+            >
+              {bookingError}
+            </div>
+          )}
+          <div className="p-6 flex gap-4">
+            <button
+              onClick={() => setIsBookingOpen(false)}
+              disabled={bookingSubmitting}
+              className="flex-1 h-[40px] rounded-lg font-inter text-[14px] text-th-text-tertiary hover:text-th-text hover:bg-[var(--th-hover)] transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={isBookingValid && !bookingSubmitting ? handleBookingConfirm : undefined}
+              disabled={!isBookingValid || bookingSubmitting}
+              aria-busy={bookingSubmitting}
+              className={`flex-1 h-[40px] rounded-lg font-inter text-[14px] font-semibold transition-all ${
+                isBookingValid && !bookingSubmitting
+                  ? "bg-[#D4AF37] hover:bg-[#F7D774] text-black"
+                  : "bg-[#D4AF37]/50 text-black/50 cursor-not-allowed"
+              }`}
+            >
+              {bookingSubmitting ? "Confirming…" : "Confirm Booking"}
+            </button>
+          </div>
         </div>
       </div>
 

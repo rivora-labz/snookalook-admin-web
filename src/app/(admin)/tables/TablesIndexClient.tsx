@@ -8,11 +8,14 @@ import {
   SortAscending,
   PencilSimple,
   CalendarX,
+  CalendarCheck,
   ClockCounterClockwise,
   Plus,
 } from "phosphor-react";
+import { toast, Toaster } from "sonner";
 import { apiFetch, formatAED } from "../../../lib/api";
 import { formatTime } from "../../../lib/datetime";
+import { useFocusTrap } from "../../../lib/use-focus-trap";
 import AddTableModal from "../../../components/AddTableModal";
 import EditTableModal, { type EditableTable } from "../../../components/EditTableModal";
 import PlayerAvatar from "../../../components/PlayerAvatar";
@@ -90,12 +93,100 @@ function TableIllustration({ status }: { status: TableStatus }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Block confirm dialog
+// ---------------------------------------------------------------------------
+
+interface BlockTarget {
+  id: string;
+  tableNumber: number;
+  currentStatus: TableStatus;
+}
+
+function BlockConfirmDialog({
+  target,
+  isInflight,
+  onConfirm,
+  onCancel,
+}: {
+  target: BlockTarget | null;
+  isInflight: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const dialogRef = useFocusTrap<HTMLDivElement>(target !== null, () => {
+    if (!isInflight) onCancel();
+  });
+  if (!target) return null;
+  const toBlock = target.currentStatus !== "MAINTENANCE";
+  const num = target.tableNumber.toString().padStart(2, "0");
+  const title = toBlock
+    ? `Block Table ${num} for maintenance?`
+    : `Unblock Table ${num}?`;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="block-dialog-title"
+      onClick={() => !isInflight && onCancel()}
+    >
+      <div
+        ref={dialogRef}
+        className="w-full max-w-sm rounded-[14px] border border-th-divider bg-th-card p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3
+          id="block-dialog-title"
+          className="font-display text-[16px] font-semibold text-th-text"
+        >
+          {title}
+        </h3>
+        <p className="mt-2 font-inter text-[13px] text-th-text-tertiary">
+          {toBlock
+            ? "This will immediately prevent new bookings on this table."
+            : "This will make the table available for new bookings."}
+        </p>
+        <div className="mt-5 flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            disabled={isInflight}
+            className="h-[36px] px-4 rounded-lg font-inter text-[13px] text-th-text-tertiary hover:text-th-text hover:bg-th-hover border border-th-divider disabled:opacity-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isInflight}
+            aria-busy={isInflight}
+            className={`h-[36px] px-5 rounded-lg font-inter text-[13px] font-semibold disabled:opacity-50 transition-colors ${
+              toBlock
+                ? "bg-[#E74C3C] hover:opacity-90 text-white"
+                : "bg-[#0B3D2E] border border-[#D4AF37] hover:bg-[#0B3D2E]/80 text-th-text"
+            }`}
+          >
+            {isInflight
+              ? toBlock ? "Blocking…" : "Unblocking…"
+              : toBlock ? "Block" : "Unblock"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
 export default function TablesIndexClient() {
   const [tables, setTables] = useState<TableItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<TabFilter>("ALL");
   const [addOpen, setAddOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<EditableTable | null>(null);
+  const [blockTarget, setBlockTarget] = useState<BlockTarget | null>(null);
+  const [blockingId, setBlockingId] = useState<string | null>(null);
 
   const fetchTables = useCallback(async () => {
     try {
@@ -114,6 +205,36 @@ export default function TablesIndexClient() {
     const interval = setInterval(tick, 15_000);
     return () => clearInterval(interval);
   }, [fetchTables]);
+
+  const handleBlockConfirm = useCallback(async () => {
+    if (!blockTarget) return;
+    const { id, currentStatus } = blockTarget;
+    const newStatus: TableStatus = currentStatus === "MAINTENANCE" ? "AVAILABLE" : "MAINTENANCE";
+
+    // Optimistic update
+    setTables((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, status: newStatus } : t))
+    );
+    setBlockingId(id);
+    setBlockTarget(null);
+
+    try {
+      await apiFetch(`/admin/tables/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: newStatus }),
+      });
+    } catch (err: unknown) {
+      // Roll back
+      setTables((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, status: currentStatus } : t))
+      );
+      const msg =
+        err instanceof Error ? err.message : "Failed to update table status";
+      toast.error(msg);
+    } finally {
+      setBlockingId(null);
+    }
+  }, [blockTarget]);
 
   const counts = useMemo(() => {
     const c: Record<TabFilter, number> = {
@@ -217,9 +338,9 @@ export default function TablesIndexClient() {
 
                   {/* Name + type */}
                   <div className="mt-4">
-                    <h3 className="font-display text-[18px] font-semibold text-th-text">
+                    <h2 className="font-display text-[18px] font-semibold text-th-text">
                       Table {t.tableNumber.toString().padStart(2, "0")}
-                    </h3>
+                    </h2>
                     <p className="font-inter text-[13px] text-th-text-tertiary">{t.type}</p>
                   </div>
 
@@ -278,13 +399,36 @@ export default function TablesIndexClient() {
                     >
                       <PencilSimple size={16} />
                     </button>
-                    <button
-                      title="Block"
-                      aria-label="Block table"
-                      className="w-8 h-8 rounded-full bg-th-divider hover:bg-[var(--th-hover)] text-th-text flex items-center justify-center transition-colors"
-                    >
-                      <CalendarX size={16} />
-                    </button>
+                    {(() => {
+                      const isMaintenance = t.status === "MAINTENANCE";
+                      const isInflight = blockingId === t.id;
+                      const label = isMaintenance
+                        ? `Unblock table ${t.tableNumber}`
+                        : `Block table ${t.tableNumber}`;
+                      return (
+                        <button
+                          onClick={() =>
+                            !isInflight &&
+                            setBlockTarget({
+                              id: t.id,
+                              tableNumber: t.tableNumber,
+                              currentStatus: t.status,
+                            })
+                          }
+                          title={isMaintenance ? "Unblock" : "Block"}
+                          aria-label={label}
+                          aria-busy={isInflight}
+                          disabled={isInflight}
+                          className="w-8 h-8 rounded-full bg-th-divider hover:bg-[var(--th-hover)] text-th-text flex items-center justify-center transition-colors disabled:opacity-50"
+                        >
+                          {isMaintenance ? (
+                            <CalendarCheck size={16} />
+                          ) : (
+                            <CalendarX size={16} />
+                          )}
+                        </button>
+                      );
+                    })()}
                     <button
                       title="History"
                       aria-label="Table history"
@@ -307,6 +451,13 @@ export default function TablesIndexClient() {
         onClose={() => setEditTarget(null)}
         onSaved={fetchTables}
       />
+      <BlockConfirmDialog
+        target={blockTarget}
+        isInflight={blockingId !== null}
+        onConfirm={handleBlockConfirm}
+        onCancel={() => setBlockTarget(null)}
+      />
+      <Toaster position="bottom-right" />
     </div>
   );
 }

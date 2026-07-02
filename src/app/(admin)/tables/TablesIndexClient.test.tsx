@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
-import { render, screen, waitFor, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, cleanup, act } from "@testing-library/react";
+import { axe } from "vitest-axe";
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks
@@ -54,9 +55,19 @@ vi.mock("phosphor-react", () => ({
   List: () => <span />,
   SortAscending: () => <span />,
   PencilSimple: () => <span />,
-  CalendarX: () => <span />,
+  CalendarX: () => <span data-testid="icon-block" />,
+  CalendarCheck: () => <span data-testid="icon-unblock" />,
   ClockCounterClockwise: () => <span />,
   Plus: () => <span />,
+}));
+
+vi.mock("../../../lib/use-focus-trap", () => ({
+  useFocusTrap: () => ({ current: null }),
+}));
+
+vi.mock("sonner", () => ({
+  toast: { error: vi.fn(), success: vi.fn() },
+  Toaster: () => null,
 }));
 
 vi.mock("@rivora-labz/snook-shared", () => ({}));
@@ -247,5 +258,77 @@ describe("TablesIndexClient", () => {
     expect(screen.getByText("Table 01")).toBeTruthy();
     expect(screen.getByText("Table 02")).toBeTruthy();
     expect(screen.getByText("Table 03")).toBeTruthy();
+  });
+
+  // --- B3 block/unblock tests ---
+
+  // 13. AVAILABLE row → click Block → dialog opens → Confirm → PATCH MAINTENANCE sent + row flips
+  it("B3: clicking block on AVAILABLE table sends PATCH {status:MAINTENANCE}", async () => {
+    apiFetchMock
+      .mockResolvedValueOnce({ items: [makeTable({ id: "t1", status: "AVAILABLE" })] })
+      .mockResolvedValueOnce({}); // PATCH response
+    render(<TablesIndexClient />);
+    await waitFor(() => expect(screen.getByText("Table 01")).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("button", { name: "Block table 1" }));
+    // Dialog appears
+    expect(screen.getByRole("alertdialog")).toBeTruthy();
+
+    // Confirm
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Block" }));
+    });
+
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        "/admin/tables/t1",
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({ status: "MAINTENANCE" }),
+        })
+      )
+    );
+  });
+
+  // 14. PATCH failure rolls back optimistic update and calls toast.error
+  it("B3: PATCH failure rolls back status and shows toast error", async () => {
+    const { toast } = await import("sonner");
+    apiFetchMock
+      .mockResolvedValueOnce({ items: [makeTable({ id: "t1", status: "AVAILABLE" })] })
+      .mockRejectedValueOnce(new Error("Server error"));
+    render(<TablesIndexClient />);
+    await waitFor(() => expect(screen.getByText("Table 01")).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("button", { name: "Block table 1" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Block" }));
+    });
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    // Row should be back to AVAILABLE (status badge text)
+    expect(screen.getByText("Available")).toBeTruthy();
+  });
+
+  // 15. MAINTENANCE row shows Unblock affordance (CalendarCheck icon + aria-label)
+  it("B3: MAINTENANCE row shows Unblock button with correct aria-label", async () => {
+    apiFetchMock.mockResolvedValue({
+      items: [makeTable({ id: "t1", tableNumber: 3, status: "MAINTENANCE" })],
+    });
+    render(<TablesIndexClient />);
+    await waitFor(() => expect(screen.getByText("Table 03")).toBeTruthy());
+
+    expect(screen.getByRole("button", { name: "Unblock table 3" })).toBeTruthy();
+    expect(screen.getByTestId("icon-unblock")).toBeTruthy();
+  });
+
+  // 16. axe — no a11y violations on page with a MAINTENANCE table
+  it("B3: axe passes on page containing MAINTENANCE table", async () => {
+    apiFetchMock.mockResolvedValue({
+      items: [makeTable({ id: "t1", status: "MAINTENANCE" })],
+    });
+    const { container } = render(<TablesIndexClient />);
+    await waitFor(() => expect(screen.getByText("Table 01")).toBeTruthy());
+    const results = await axe(container);
+    expect(results.violations).toHaveLength(0);
   });
 });

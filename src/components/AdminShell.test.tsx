@@ -1,16 +1,42 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, waitFor, act } from "@testing-library/react";
+import { axe } from "vitest-axe";
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks
 // ---------------------------------------------------------------------------
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
+const MockApiError = vi.hoisted(() => {
+  class ApiError extends Error {
+    status: number;
+    code: string;
+    constructor(status: number, code: string, message: string) {
+      super(message);
+      this.status = status;
+      this.code = code;
+      this.name = "ApiError";
+    }
+  }
+  return ApiError;
+});
 
 vi.mock("../lib/api", () => ({
   apiFetch: apiFetchMock,
   formatAED: (fils: number) => `AED ${(fils / 100).toFixed(2)}`,
+  ApiError: MockApiError,
+}));
+
+vi.mock("../lib/datetime", () => ({
+  getTodayDubai: () => "2026-07-02",
+  assembleDubaiStartAt: (date: string, slot: string) => `${date}T14:00:00+04:00-stub-${slot}`,
+  formatDate: (s: string) => s,
+  formatDateShort: (s: string) => s,
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
 }));
 
 // Mutable state for useAdmin so individual tests can override values
@@ -36,7 +62,7 @@ vi.mock("../lib/use-admin-activity", () => ({
   activityText: () => "activity text",
 }));
 
-vi.mock("sonner", () => ({ Toaster: () => null, toast: { custom: vi.fn() } }));
+vi.mock("sonner", () => ({ Toaster: () => null, toast: { custom: vi.fn(), error: vi.fn(), success: vi.fn() } }));
 vi.mock("./AdminNav", () => ({ default: () => <nav data-testid="admin-nav" /> }));
 vi.mock("./AdminHeader", () => ({ default: () => <header data-testid="admin-header" /> }));
 vi.mock("./DrawerOverlay", () => ({ default: () => null }));
@@ -58,11 +84,74 @@ vi.mock("phosphor-react", () => ({
 import AdminShell from "./AdminShell";
 
 // ---------------------------------------------------------------------------
+// Fixtures
+// ---------------------------------------------------------------------------
+
+const PLAYER = {
+  userId: "u-alice",
+  displayName: "Alice",
+  avatarUrl: null,
+  email: null,
+  phone: null,
+  skillTier: null,
+  winRate: null,
+  gamesPlayed: 5,
+  rating: 1200,
+  joinedAt: "2026-01-01",
+};
+
+const TABLE = {
+  id: "tbl-1",
+  centerId: "c1",
+  tableNumber: 3,
+  type: "SNOOKER",
+  hourlyRate: 15000,
+  pricePerHourFils: 15000,
+  status: "AVAILABLE",
+  currentBooking: null,
+};
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function renderShell(children: React.ReactNode = <p>child content</p>) {
   return render(<AdminShell>{children}</AdminShell>);
+}
+
+/** Simulate selecting a player, date-slot, table, then clicking Confirm.
+ *  Requires vi.useFakeTimers() to be active. Uses act+advanceTimersByTime
+ *  to avoid waitFor deadlocks (waitFor uses setTimeout internally). */
+async function fillAndSubmitBooking(container: HTMLElement) {
+  // Open player dropdown
+  fireEvent.click(screen.getByPlaceholderText(/search player/i));
+
+  // Advance past 200ms debounce + flush all promise microtasks
+  await act(async () => {
+    vi.advanceTimersByTime(300);
+  });
+  // Flush remaining microtasks from apiFetch resolution
+  await act(async () => {});
+
+  // Alice appears twice (PlayerAvatar mock + display span) — both inside the dropdown row
+  const aliceEls = screen.getAllByText("Alice");
+  expect(aliceEls.length).toBeGreaterThan(0);
+  fireEvent.click(aliceEls[0]!);
+
+  // Select first time slot (2:00 PM)
+  const slotBtns = container.querySelectorAll<HTMLButtonElement>(".hide-scrollbar button");
+  if (slotBtns.length > 0) fireEvent.click(slotBtns[0]!);
+  else fireEvent.click(screen.getAllByRole("button", { name: /PM/ })[0]!);
+
+  // Table T3 loaded via immediate apiFetch — synchronous check
+  const t3Btn = screen.getByRole("button", { name: /T3/ });
+  fireEvent.click(t3Btn);
+
+  // Click Confirm and flush async handler
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: /Confirm Booking/i }));
+  });
+  await act(async () => {});
 }
 
 // ---------------------------------------------------------------------------
@@ -189,5 +278,80 @@ describe("AdminShell", () => {
     expect(closeBtn).toBeTruthy();
     fireEvent.click(closeBtn);
     expect(mockSetIsBookingOpen).toHaveBeenCalledWith(false);
+  });
+
+  // --- B4 tests ---
+
+  // 14. Confirm posts exact body: hostUserId (not name), ISO startAt with +04:00, durationMinutes 60
+  it("B4: confirm posts body with hostUserId (uuid), +04:00 startAt, durationMinutes=60", async () => {
+    vi.useFakeTimers();
+    mockIsBookingOpen = true;
+    apiFetchMock.mockImplementation((path: string) => {
+      if (path.startsWith("/admin/tables")) return Promise.resolve({ items: [TABLE] });
+      if (path.startsWith("/admin/players")) return Promise.resolve({ items: [PLAYER] });
+      if (path === "/admin/bookings") return Promise.resolve({});
+      return Promise.resolve({ items: [] });
+    });
+
+    const { container } = renderShell();
+    // Flush initial render effects (tables apiFetch resolves immediately)
+    await act(async () => {});
+    await fillAndSubmitBooking(container);
+
+    // Synchronous — act inside fillAndSubmitBooking already drained the POST call
+    const postCall = apiFetchMock.mock.calls.find(
+      (c) => c[0] === "/admin/bookings"
+    );
+    expect(postCall).toBeTruthy();
+    const body = JSON.parse(postCall![1].body);
+    expect(body.hostUserId).toBe("u-alice");
+    expect(body.tableId).toBe("tbl-1");
+    expect(body.durationMinutes).toBe(60);
+    expect(body.matchMode).toBe("SOLO");
+    expect(body.startAt).toContain("+04:00");
+    vi.useRealTimers();
+  });
+
+  // 15. 409 slot-taken: drawer stays open, inline error appears (role=alert)
+  it("B4: 409 response keeps drawer open and shows inline slot-taken error", async () => {
+    vi.useFakeTimers();
+    mockIsBookingOpen = true;
+    apiFetchMock.mockImplementation((path: string) => {
+      if (path.startsWith("/admin/tables")) return Promise.resolve({ items: [TABLE] });
+      if (path.startsWith("/admin/players")) return Promise.resolve({ items: [PLAYER] });
+      if (path === "/admin/bookings")
+        return Promise.reject(new MockApiError(409, "SLOT_ALREADY_TAKEN", "Slot taken"));
+      return Promise.resolve({ items: [] });
+    });
+
+    const { container } = renderShell();
+    await act(async () => {});
+    await fillAndSubmitBooking(container);
+
+    // act inside fillAndSubmitBooking flushed the rejected POST; error should be inline
+    const alert = screen.getByRole("alert");
+    expect(alert.textContent).toContain("slot is already taken");
+    expect(mockSetIsBookingOpen).not.toHaveBeenCalledWith(false);
+    vi.useRealTimers();
+  });
+
+  // 16. Date defaults to today (getTodayDubai mock returns "2026-07-02")
+  it("B4: date input defaults to today's Dubai date", () => {
+    mockIsBookingOpen = true;
+    renderShell();
+    const dateInput = screen.getByLabelText("Date") as HTMLInputElement;
+    expect(dateInput.value).toBe("2026-07-02");
+  });
+
+  // 17. axe — no a11y violations with booking drawer open
+  it("B4: axe passes with booking drawer open", async () => {
+    vi.useRealTimers(); // ensure real timers for waitFor
+    mockIsBookingOpen = true;
+    apiFetchMock.mockResolvedValue({ items: [] });
+    const { container } = renderShell();
+    // "New Booking" is in the drawer header — always present when isBookingOpen=true
+    expect(screen.getByText("New Booking")).toBeTruthy();
+    const results = await axe(container);
+    expect(results.violations).toHaveLength(0);
   });
 });

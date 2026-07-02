@@ -6,7 +6,7 @@ import {
   Check, CheckCircle, DotsThree, X,
 } from "phosphor-react";
 import { toast } from "sonner";
-import { apiFetch } from "../../../lib/api";
+import { apiFetch, ApiError } from "../../../lib/api";
 import { useFocusTrap } from "../../../lib/use-focus-trap";
 
 const TABS = [
@@ -79,6 +79,13 @@ interface TeamMember {
   user: { id: string; displayName: string; avatarUrl: string | null; email: string | null; phone: string | null };
   role: "OWNER" | "MANAGER" | "STAFF";
   createdAt: string;
+}
+
+interface PlayerResult {
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  phone: string | null;
 }
 
 const DEFAULT_HOURS: HoursState = DAYS.reduce((acc, day) => {
@@ -282,9 +289,35 @@ export default function SettingsPage() {
   const [inviteUserId, setInviteUserId] = useState("");
   const [inviteRole, setInviteRole] = useState<"OWNER" | "MANAGER" | "STAFF">("STAFF");
   const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteQuery, setInviteQuery] = useState("");
+  const [inviteResults, setInviteResults] = useState<PlayerResult[]>([]);
+  const [inviteSearching, setInviteSearching] = useState(false);
+  const [inviteSelectedPlayer, setInviteSelectedPlayer] = useState<PlayerResult | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const inviteSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inviteRequestId = useRef(0);
+
+  // Must be declared before useFocusTrap so the callback closure can reference it.
+  function closeInviteDialog() {
+    setInviteOpen(false);
+    setInviteUserId("");
+    setInviteRole("STAFF");
+    setInviteQuery("");
+    setInviteResults([]);
+    setInviteSearching(false);
+    setInviteSelectedPlayer(null);
+    setInviteError(null);
+    if (inviteSearchTimer.current) {
+      clearTimeout(inviteSearchTimer.current);
+      inviteSearchTimer.current = null;
+    }
+  }
+
   const inviteTitleId = useId();
+  const inviteDropdownId = useId();
+  const inviteSearchInputId = useId();
   const inviteDialogRef = useFocusTrap<HTMLDivElement>(inviteOpen, () => {
-    if (!inviteBusy) setInviteOpen(false);
+    if (!inviteBusy) closeInviteDialog();
   });
 
   const markChanged = (tab: TabId = activeTab) => {
@@ -420,22 +453,59 @@ export default function SettingsPage() {
     }
   };
 
+  const handleInviteSearch = (q: string) => {
+    setInviteQuery(q);
+    setInviteSelectedPlayer(null);
+    setInviteUserId("");
+    setInviteError(null);
+    if (inviteSearchTimer.current) clearTimeout(inviteSearchTimer.current);
+    if (!q.trim()) { setInviteResults([]); setInviteSearching(false); return; }
+    setInviteSearching(true);
+    const thisRequest = ++inviteRequestId.current;
+    inviteSearchTimer.current = setTimeout(async () => {
+      try {
+        const res = await apiFetch<{ items: PlayerResult[] }>("/admin/players?search=" + encodeURIComponent(q));
+        if (thisRequest !== inviteRequestId.current) return; // stale — discard
+        setInviteResults(res.items);
+      } catch {
+        if (thisRequest !== inviteRequestId.current) return;
+        setInviteResults([]);
+      } finally {
+        if (thisRequest === inviteRequestId.current) {
+          setInviteSearching(false);
+        }
+        inviteSearchTimer.current = null;
+      }
+    }, 200);
+  };
+
+  const handleInviteSelectPlayer = (p: PlayerResult) => {
+    setInviteSelectedPlayer(p);
+    setInviteUserId(p.userId);
+    setInviteQuery("");
+    setInviteResults([]);
+    setInviteError(null);
+  };
+
   const handleInvite = async () => {
-    if (!inviteUserId || inviteBusy) return;
+    if (!inviteUserId.trim() || inviteBusy) return;
     setInviteBusy(true);
+    setInviteError(null);
     try {
       const member = await apiFetch<TeamMember>("/admin/team", {
         method: "POST",
-        body: JSON.stringify({ userId: inviteUserId, role: inviteRole }),
+        body: JSON.stringify({ userId: inviteUserId.trim(), role: inviteRole }),
       });
       setTeam((prev) => [...prev, member]);
-      setInviteOpen(false);
-      setInviteUserId("");
-      setInviteRole("STAFF");
+      closeInviteDialog();
       toast.success("Team member added");
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to add member.";
-      toast.error(msg);
+      if (err instanceof ApiError && err.status === 409) {
+        setInviteError("Player is already a staff member.");
+      } else {
+        const msg = err instanceof Error ? err.message : "Failed to add member.";
+        toast.error(msg);
+      }
     } finally {
       setInviteBusy(false);
     }
@@ -952,20 +1022,104 @@ export default function SettingsPage() {
           role="dialog"
           aria-modal="true"
           aria-labelledby={inviteTitleId}
-          onClick={() => !inviteBusy && setInviteOpen(false)}
+          onClick={() => !inviteBusy && closeInviteDialog()}
         >
           <div ref={inviteDialogRef} className="bg-th-card rounded-[14px] border border-[var(--th-border)] p-6 w-[420px]" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 id={inviteTitleId} className="font-display text-[16px] font-semibold text-th-text">Invite team member</h3>
-              <button onClick={() => !inviteBusy && setInviteOpen(false)} className="text-th-text-tertiary hover:text-th-text"><X size={18} /></button>
+              <button onClick={() => !inviteBusy && closeInviteDialog()} aria-label="Close invite dialog" className="text-th-text-tertiary hover:text-th-text"><X size={18} /></button>
             </div>
             <div className="flex flex-col gap-4">
-              <InputField
-                label="User ID"
-                value={inviteUserId}
-                onChange={setInviteUserId}
-                placeholder="uuid of existing user"
-              />
+
+              {/* Player search picker */}
+              <div className="flex flex-col gap-2">
+                <label htmlFor={inviteSearchInputId} className="font-inter text-[12px] font-medium uppercase tracking-[0.04em] text-th-text-tertiary">Player</label>
+                {inviteSelectedPlayer ? (
+                  <div className="flex items-center gap-2 bg-th-bg border border-[var(--th-border)] rounded-[10px] px-3 h-[40px]">
+                    <span className="flex-1 font-inter text-[14px] text-th-text truncate">{inviteSelectedPlayer.displayName}</span>
+                    <button
+                      aria-label="Clear selected player"
+                      onClick={() => { setInviteSelectedPlayer(null); setInviteUserId(""); }}
+                      className="text-th-text-tertiary hover:text-th-text flex-shrink-0"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <input
+                      id={inviteSearchInputId}
+                      role="combobox"
+                      aria-expanded={inviteResults.length > 0}
+                      aria-controls={inviteDropdownId}
+                      aria-autocomplete="list"
+                      type="text"
+                      value={inviteQuery}
+                      onChange={(e) => handleInviteSearch(e.target.value)}
+                      placeholder="Search by name or phone…"
+                      className="w-full bg-th-bg border border-[var(--th-border)] rounded-[10px] px-3 h-[40px] text-[14px] text-th-text font-inter focus:outline-none focus:border-[#D4AF37] focus:shadow-[0_0_0_2px_rgba(212,175,55,0.2)] transition-all placeholder:text-th-text-tertiary"
+                    />
+                    {inviteSearching && (
+                      <span aria-hidden="true" className="absolute right-3 top-1/2 -translate-y-1/2 font-inter text-[12px] text-th-text-tertiary">…</span>
+                    )}
+                    {inviteResults.length > 0 && (
+                      <ul
+                        id={inviteDropdownId}
+                        role="listbox"
+                        aria-label="Player search results"
+                        className="absolute z-10 top-full left-0 right-0 mt-1 bg-th-card border border-[var(--th-border)] rounded-[10px] overflow-hidden shadow-lg max-h-[200px] overflow-y-auto"
+                      >
+                        {inviteResults.map((p) => {
+                          const masked = p.phone ? "••••" + p.phone.slice(-4) : null;
+                          return (
+                            <li
+                              key={p.userId}
+                              role="option"
+                              aria-selected={false}
+                              onClick={() => handleInviteSelectPlayer(p)}
+                              className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-[var(--th-hover)] transition-colors"
+                            >
+                              <div aria-hidden="true" className="w-7 h-7 rounded-full bg-th-divider flex items-center justify-center flex-shrink-0">
+                                <span className="font-inter text-[11px] font-semibold text-th-text-secondary">{p.displayName.charAt(0).toUpperCase()}</span>
+                              </div>
+                              <div className="flex flex-col min-w-0">
+                                <span className="font-inter text-[13px] font-medium text-th-text truncate">{p.displayName}</span>
+                                {masked && <span className="font-inter text-[11px] text-th-text-tertiary">{masked}</span>}
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                    {inviteQuery.trim() && !inviteSearching && inviteResults.length === 0 && (
+                      <p className="mt-1.5 font-inter text-[12px] text-th-text-tertiary px-1">
+                        Player not found — they must log in to the app once before they can be invited.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* UUID fallback */}
+              <details>
+                <summary className="font-inter text-[12px] text-th-text-tertiary cursor-pointer select-none">
+                  Enter User ID manually (advanced)
+                </summary>
+                <div className="mt-2">
+                  <InputField
+                    label="User ID"
+                    value={inviteUserId}
+                    onChange={(v) => { setInviteUserId(v); setInviteSelectedPlayer(null); setInviteError(null); }}
+                    placeholder="uuid of existing user"
+                  />
+                </div>
+              </details>
+
+              {/* Inline 409 error */}
+              {inviteError && (
+                <div role="alert" className="font-inter text-[13px] text-[#E74C3C]">{inviteError}</div>
+              )}
+
               <div className="flex flex-col gap-2">
                 <label className="font-inter text-[12px] font-medium uppercase tracking-[0.04em] text-th-text-tertiary">Role</label>
                 <div className="flex bg-th-bg border border-[var(--th-border)] rounded-[10px] p-1 w-fit">
@@ -982,16 +1136,17 @@ export default function SettingsPage() {
               </div>
               <div className="flex justify-end gap-3 mt-2">
                 <button
-                  onClick={() => !inviteBusy && setInviteOpen(false)}
+                  onClick={() => !inviteBusy && closeInviteDialog()}
                   className="h-[36px] px-4 rounded-lg font-inter text-[13px] text-th-text-tertiary hover:text-th-text hover:bg-[var(--th-hover)] transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleInvite}
-                  disabled={!inviteUserId || inviteBusy}
+                  disabled={!inviteUserId.trim() || inviteBusy}
+                  aria-busy={inviteBusy}
                   className={`h-[36px] px-4 rounded-lg font-inter text-[13px] font-semibold bg-[#D4AF37] text-black ${
-                    !inviteUserId || inviteBusy ? "opacity-60 cursor-not-allowed" : "hover:bg-[#F7D774]"
+                    !inviteUserId.trim() || inviteBusy ? "opacity-60 cursor-not-allowed" : "hover:bg-[#F7D774]"
                   }`}
                 >
                   {inviteBusy ? "Adding…" : "Add member"}
