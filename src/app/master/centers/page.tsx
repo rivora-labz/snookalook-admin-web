@@ -3,6 +3,7 @@ import type { Route } from "next";
 import { masterFetchSafe } from "../../../lib/master-api";
 import { formatAED } from "../../../lib/currency";
 import { formatDate } from "../../../lib/datetime";
+import CreateCenterButton from "./CreateCenterButton";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -41,6 +42,7 @@ export default async function CentersPage() {
             All Snook A Look venues. Click a row to drill in.
           </p>
         </div>
+        <CreateCenterButton />
       </header>
 
       <div className="bg-th-card rounded-xl border border-th-border overflow-hidden">
